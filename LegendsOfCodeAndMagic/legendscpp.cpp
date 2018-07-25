@@ -31,12 +31,26 @@ const int ZERO_CHAR = '0';
 const int DIRECTIONS_COUNT = 8;
 const int BYTE_SIZE = 8;
 
+const string EMPTY_STRING = "";
+
+const string SUMMON = "SUMMON";
+const string ATTACK = "ATTACK";
+const string SPACE = " ";
+const string END_EXPRESSION = "; ";
+const string OPPONENT_ATTCK = "-1";
+
 const int DRAFT_TURNS = 30;
 
 enum class GamePhase : int {
 	INVALID = -1,
 	DRAFT,
 	BATTLE,
+};
+
+enum class Location : int {
+	OPPONENT_BOARD = -1,
+	PLAYER_HAND = 0,
+	PLAYER_BOARD = 1,
 };
 
 //-------------------------------------------------------------------------------------------------------------
@@ -47,9 +61,29 @@ enum class GamePhase : int {
 class Card {
 public:
 	Card();
+
+	Card(
+		int id,
+		int cardType,
+		int cost
+	);
+
 	virtual ~Card();
 
+	bool operator<(const Card& card) const {
+		return (cost < card.cost);
+	}
+
+	int getId() { return id; }
+	int getCardType() { return cardType; }
+	int getCost() { return cost; }
+
+	virtual void play(string& turnCommands) = 0;
+
 private:
+	int id;
+	int cardType;
+	int cost;
 };
 
 //*************************************************************************************************************
@@ -59,6 +93,20 @@ Card::Card() {
 
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Card::Card(
+	int id,
+	int cardType,
+	int cost
+) :
+	id(id),
+	cardType(cardType),
+	cost(cost)
+{
+
+}
 //*************************************************************************************************************
 //*************************************************************************************************************
 
@@ -74,15 +122,47 @@ Card::~Card() {
 class Creature : public Card {
 public:
 	Creature();
+
+	Creature(
+		int id,
+		int cardType,
+		int cost,
+		int attack,
+		int defense
+	);
+
 	~Creature();
 
+	void play(string& turnCommands) override;
+
+	void attackDirectly(string& turnCommands);
+
 private:
+	int attack;
+	int defense;
 };
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Creature::Creature() {
+Creature::Creature() : Card(){
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Creature::Creature(
+	int id,
+	int cardType,
+	int cost,
+	int attack,
+	int defense
+) :
+	Card(id, cardType, cost),
+	attack(attack),
+	defense(defense)
+{
 
 }
 
@@ -93,17 +173,36 @@ Creature::~Creature() {
 
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Creature::play(string& turnCommands) {
+	turnCommands += SUMMON + SPACE + to_string(getId()) + END_EXPRESSION;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Creature::attackDirectly(string& turnCommands) {
+	turnCommands += ATTACK + SPACE + to_string(getId()) + SPACE + OPPONENT_ATTCK + END_EXPRESSION;
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
-typedef vector<Card> Cards;
+typedef vector<Card*> Cards;
 
 class Hand {
 public:
 	Hand();
 	~Hand();
+
+	void addCard(Card* card);
+	void clearCards();
+	void sortCards();
+	void getHighestCostCreatures(int playerMana, string& turnCommands);
 
 private:
 	Cards cards;
@@ -120,7 +219,119 @@ Hand::Hand() {
 //*************************************************************************************************************
 
 Hand::~Hand() {
+	clearCards();
+}
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::addCard(Card* card) {
+	cards.push_back(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::clearCards() {
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		if (cards[cardIdx]) {
+			delete cards[cardIdx];
+			cards[cardIdx] = nullptr;
+		}
+	}
+
+	cards.clear();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::sortCards() {
+	sort(cards.begin(), cards.end());
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::getHighestCostCreatures(int playerMana, string& turnCommands) {
+	int manaToUse = playerMana;
+
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		Card* card = cards[cardIdx];
+		int cardManaCost = card->getCost();
+
+		if (manaToUse > cardManaCost) {
+			card->play(turnCommands);
+			manaToUse -= cardManaCost;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class Board {
+public:
+	Board();
+	~Board();
+
+	void addCard(Card* card);
+	void clearCards();
+	void directCreaturesattack(string& turnCommands);
+
+private:
+	Cards cards;
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Board::Board() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Board::~Board() {
+	clearCards();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::addCard(Card* card) {
+	cards.push_back(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::clearCards() {
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		if (cards[cardIdx]) {
+			delete cards[cardIdx];
+			cards[cardIdx] = nullptr;
+		}
+	}
+
+	cards.clear();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::directCreaturesattack(string& turnCommands) {
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		Card* card = cards[cardIdx];
+		Creature* creture = dynamic_cast<Creature*>(card);
+
+		if (creture) {
+			creture->attackDirectly(turnCommands);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -133,14 +344,33 @@ public:
 	Player();
 	~Player();
 
+	void addCardToHand(Card* card);
+	void addCardToBoard(Card* card);
+	void reset();
+	void sortHand();
+	void makeBattleTurn();
+	void chooseHighestCostCreatures();
+	void outputTurnCommands();
+	void attack();
+
+	void setMana(int mana) {
+		this->mana = mana;
+	}
+
 private:
 	Hand hand;
+	Board board;
+	int mana;
+	string turnCommands;
 };
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Player::Player() {
+Player::Player() :
+	mana(0),
+	turnCommands(EMPTY_STRING)
+{
 
 }
 
@@ -149,6 +379,67 @@ Player::Player() {
 
 Player::~Player() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::addCardToHand(Card* card) {
+	hand.addCard(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::addCardToBoard(Card* card) {
+	board.addCard(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::reset() {
+	hand.clearCards();
+	board.clearCards();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::sortHand() {
+	hand.sortCards();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::makeBattleTurn() {
+	sortHand();
+	chooseHighestCostCreatures();
+	attack();
+
+	outputTurnCommands();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::chooseHighestCostCreatures() {
+	hand.getHighestCostCreatures(mana, turnCommands);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::outputTurnCommands() {
+	cout << turnCommands << endl;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Player::attack() {
+	board.directCreaturesattack(turnCommands);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -179,6 +470,7 @@ private:
 	int turnsCount;
 
 	GamePhase gamePhase;
+	Player player;
 };
 
 //*************************************************************************************************************
@@ -186,7 +478,8 @@ private:
 
 Game::Game() :
 	turnsCount(0),
-	gamePhase(GamePhase::INVALID)
+	gamePhase(GamePhase::INVALID),
+	player()
 {
 
 }
@@ -238,6 +531,10 @@ void Game::getTurnInput() {
 		int playerDeck;
 		int playerRune;
 		cin >> playerHealth >> playerMana >> playerDeck >> playerRune; cin.ignore();
+
+		if (0 == i) {
+			player.setMana(playerMana);
+		}
 	}
 
 	int opponentHand;
@@ -258,6 +555,18 @@ void Game::getTurnInput() {
 		int opponentHealthChange;
 		int cardDraw;
 		cin >> cardNumber >> instanceId >> location >> cardType >> cost >> attack >> defense >> abilities >> myHealthChange >> opponentHealthChange >> cardDraw; cin.ignore();
+
+		if (GamePhase::BATTLE == gamePhase) {
+			Card* card = new Creature(instanceId, cardType, cost, attack, defense);
+
+			if (Location::PLAYER_HAND == Location(location)) {
+				player.addCardToHand(card);
+			}
+
+			if (Location::PLAYER_BOARD == Location(location)) {
+				player.addCardToBoard(card);
+			}
+		}
 	}
 }
 
@@ -275,7 +584,7 @@ void Game::makeTurn() {
 		cout << "PASS" << endl;
 	}
 	else {
-
+		player.makeBattleTurn();
 	}
 }
 
@@ -287,6 +596,10 @@ void Game::turnEnd() {
 
 	if (turnsCount >= DRAFT_TURNS) {
 		switchToBattlePhase();
+	}
+
+	if (GamePhase::BATTLE == gamePhase) {
+		player.reset();
 	}
 }
 
