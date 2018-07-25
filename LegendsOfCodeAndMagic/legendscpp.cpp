@@ -30,16 +30,18 @@ const int TREE_ROOT_NODE_DEPTH = 1;
 const int ZERO_CHAR = '0';
 const int DIRECTIONS_COUNT = 8;
 const int BYTE_SIZE = 8;
+const int OPPONENT_ATTCK = -1;
+const int DRAFT_TURNS = 30;
 
 const string EMPTY_STRING = "";
-
 const string SUMMON = "SUMMON";
 const string ATTACK = "ATTACK";
 const string SPACE = " ";
 const string END_EXPRESSION = "; ";
-const string OPPONENT_ATTCK = "-1";
 
-const int DRAFT_TURNS = 30;
+const char GUARD = 'G';
+
+
 
 enum class GamePhase : int {
 	INVALID = -1,
@@ -128,18 +130,38 @@ public:
 		int cardType,
 		int cost,
 		int attack,
-		int defense
+		int defense,
+		bool guard
 	);
 
 	~Creature();
 
+	int getAttack() const { return attack; }
+	int getDefense() const { return defense; }
+	bool getGuard() const { return guard; }
+
+	void setAttack(int attack) {
+		this->attack = attack;
+	}
+
+	void setDefense(int defense) {
+		this->defense = defense;
+	}
+
+	void setGuard(bool guard) {
+		this->guard = guard;
+	}
+
 	void play(string& turnCommands) override;
 
 	void attackDirectly(string& turnCommands);
+	void attackCreature(Creature* oppCreture, string& turnCommands);
 
 private:
 	int attack;
 	int defense;
+
+	bool guard;
 };
 
 //*************************************************************************************************************
@@ -157,11 +179,13 @@ Creature::Creature(
 	int cardType,
 	int cost,
 	int attack,
-	int defense
+	int defense,
+	bool guard
 ) :
 	Card(id, cardType, cost),
 	attack(attack),
-	defense(defense)
+	defense(defense),
+	guard(guard)
 {
 
 }
@@ -184,7 +208,28 @@ void Creature::play(string& turnCommands) {
 //*************************************************************************************************************
 
 void Creature::attackDirectly(string& turnCommands) {
-	turnCommands += ATTACK + SPACE + to_string(getId()) + SPACE + OPPONENT_ATTCK + END_EXPRESSION;
+	turnCommands +=
+		ATTACK +
+		SPACE +
+		to_string(getId()) +
+		SPACE +
+		to_string(OPPONENT_ATTCK) +
+		END_EXPRESSION;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Creature::attackCreature(Creature* oppCreture, string& turnCommands) {
+	oppCreture->setDefense(oppCreture->getDefense() - attack);
+
+	turnCommands +=
+		ATTACK +
+		SPACE +
+		to_string(getId()) +
+		SPACE +
+		to_string(oppCreture->getId()) +
+		END_EXPRESSION;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -279,7 +324,10 @@ public:
 
 	void addCard(Card* card);
 	void clearCards();
-	void directCreaturesattack(string& turnCommands);
+	void directCreaturesAttack(string& turnCommands);
+	void attackCreaturesFirst(const Board* opponentBoard, string& turnCommands);
+
+	int getCreturesCount() const;
 
 private:
 	Cards cards;
@@ -323,7 +371,7 @@ void Board::clearCards() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::directCreaturesattack(string& turnCommands) {
+void Board::directCreaturesAttack(string& turnCommands) {
 	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
 		Card* card = cards[cardIdx];
 		Creature* creture = dynamic_cast<Creature*>(card);
@@ -332,6 +380,56 @@ void Board::directCreaturesattack(string& turnCommands) {
 			creture->attackDirectly(turnCommands);
 		}
 	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommands) {
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		Card* card = cards[cardIdx];
+		Creature* creture = dynamic_cast<Creature*>(card);
+
+		if (!creture) {
+			continue;
+		}
+
+		int target = OPPONENT_ATTCK;
+
+		Creature* oppCreture = nullptr;
+
+		for (size_t oppCardIdx = 0; oppCardIdx < opponentBoard->cards.size(); ++oppCardIdx) {
+			Card* oppCard = opponentBoard->cards[cardIdx];
+			//cerr << oppCard->getId() << " ";
+			oppCreture = dynamic_cast<Creature*>(oppCard);
+
+			if (!oppCreture) {
+				continue;
+			}
+
+			if (oppCreture->getDefense() > 0) {
+				target = oppCreture->getId();
+
+				if (oppCreture->getGuard()) {
+					break;
+				}
+			}
+		}
+
+		if (oppCreture) {
+			creture->attackCreature(oppCreture, turnCommands);
+		}
+		else {
+			creture->attackDirectly(turnCommands);
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int Board::getCreturesCount() const {
+	return int(cards.size());
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -344,18 +442,20 @@ public:
 	Player();
 	~Player();
 
+	const Board* getBoard() const { return &board; }
+	
+	void setMana(int mana) {
+		this->mana = mana;
+	}
+
 	void addCardToHand(Card* card);
 	void addCardToBoard(Card* card);
 	void reset();
 	void sortHand();
-	void makeBattleTurn();
+	void makeBattleTurn(const Board* opponentBoard);
 	void chooseHighestCostCreatures();
 	void outputTurnCommands();
-	void attack();
-
-	void setMana(int mana) {
-		this->mana = mana;
-	}
+	void attack(const Board* opponentBoard);
 
 private:
 	Hand hand;
@@ -401,6 +501,7 @@ void Player::addCardToBoard(Card* card) {
 void Player::reset() {
 	hand.clearCards();
 	board.clearCards();
+	turnCommands = EMPTY_STRING;
 }
 
 //*************************************************************************************************************
@@ -413,10 +514,10 @@ void Player::sortHand() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Player::makeBattleTurn() {
+void Player::makeBattleTurn(const Board* opponentBoard) {
 	sortHand();
 	chooseHighestCostCreatures();
-	attack();
+	attack(opponentBoard);
 
 	outputTurnCommands();
 }
@@ -438,8 +539,13 @@ void Player::outputTurnCommands() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Player::attack() {
-	board.directCreaturesattack(turnCommands);
+void Player::attack(const Board* opponentBoard) {
+	if (0 == opponentBoard->getCreturesCount()) {
+		board.directCreaturesAttack(turnCommands);
+	}
+	else {
+		board.attackCreaturesFirst(opponentBoard, turnCommands);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -471,6 +577,7 @@ private:
 
 	GamePhase gamePhase;
 	Player player;
+	Player opponent;
 };
 
 //*************************************************************************************************************
@@ -479,7 +586,8 @@ private:
 Game::Game() :
 	turnsCount(0),
 	gamePhase(GamePhase::INVALID),
-	player()
+	player(),
+	opponent()
 {
 
 }
@@ -532,6 +640,10 @@ void Game::getTurnInput() {
 		int playerRune;
 		cin >> playerHealth >> playerMana >> playerDeck >> playerRune; cin.ignore();
 
+#ifdef OUTPUT_GAME_DATA
+		cerr << playerHealth << " " << playerMana << " " << playerDeck << " " << playerRune << endl;
+#endif
+
 		if (0 == i) {
 			player.setMana(playerMana);
 		}
@@ -541,6 +653,11 @@ void Game::getTurnInput() {
 	cin >> opponentHand; cin.ignore();
 	int cardCount;
 	cin >> cardCount; cin.ignore();
+
+#ifdef OUTPUT_GAME_DATA
+	cerr << opponentHand << endl;
+	cerr << cardCount << endl;
+#endif
 
 	for (int i = 0; i < cardCount; i++) {
 		int cardNumber;
@@ -556,8 +673,12 @@ void Game::getTurnInput() {
 		int cardDraw;
 		cin >> cardNumber >> instanceId >> location >> cardType >> cost >> attack >> defense >> abilities >> myHealthChange >> opponentHealthChange >> cardDraw; cin.ignore();
 
+#ifdef OUTPUT_GAME_DATA
+		cerr << cardNumber << " " << instanceId << " " << location << " " << cardType << " " << cost << " " << attack << " " << defense << " " << abilities << " " << myHealthChange << " " << opponentHealthChange << " " << cardDraw << endl;
+#endif
+		bool guard = abilities.find(GUARD) != string::npos;
 		if (GamePhase::BATTLE == gamePhase) {
-			Card* card = new Creature(instanceId, cardType, cost, attack, defense);
+			Card* card = new Creature(instanceId, cardType, cost, attack, defense, guard);
 
 			if (Location::PLAYER_HAND == Location(location)) {
 				player.addCardToHand(card);
@@ -565,6 +686,10 @@ void Game::getTurnInput() {
 
 			if (Location::PLAYER_BOARD == Location(location)) {
 				player.addCardToBoard(card);
+			}
+
+			if (Location::OPPONENT_BOARD == Location(location)) {
+				opponent.addCardToBoard(card);
 			}
 		}
 	}
@@ -584,7 +709,7 @@ void Game::makeTurn() {
 		cout << "PASS" << endl;
 	}
 	else {
-		player.makeBattleTurn();
+		player.makeBattleTurn(opponent.getBoard());
 	}
 }
 
@@ -600,6 +725,7 @@ void Game::turnEnd() {
 
 	if (GamePhase::BATTLE == gamePhase) {
 		player.reset();
+		opponent.reset();
 	}
 }
 
