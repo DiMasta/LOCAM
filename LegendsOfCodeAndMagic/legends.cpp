@@ -32,6 +32,7 @@ const int DIRECTIONS_COUNT = 8;
 const int BYTE_SIZE = 8;
 const int OPPONENT_ATTCK = -1;
 const int DRAFT_TURNS = 30;
+const int MAX_GAME_CARDS = 60;
 
 const string EMPTY_STRING = "";
 const string SUMMON = "SUMMON";
@@ -546,6 +547,48 @@ void Player::attack(const Board* opponentBoard) {
 	else {
 		board.attackCreaturesFirst(opponentBoard, turnCommands);
 	}
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class GameState {
+public:
+	GameState();
+	~GameState();
+
+	void addCard(
+		int instanceId,
+		int location,
+		int cardType,
+		int cost,
+		int attack,
+		int defense,
+		const string& abilities,
+		int myHealthChange,
+		int opponentHealthChange,
+		int cardDraw
+	);
+private:
+	int cards[MAX_GAME_CARDS];
+	char abilities[MAX_GAME_CARDS];
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::GameState() {
+	memset(cards, 0, sizeof(cards));
+	memset(abilities, 0, sizeof(abilities));
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::~GameState() {
+
 }
 
 //-------------------------------------------------------------------------------------------------------------
