@@ -20,6 +20,8 @@ using namespace std;
 //#define OUTPUT_GAME_DATA
 //#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
+//#define DEBUG_ONE_TURN
+//#define DEBUG_BATTLE
 
 const string INPUT_FILE_NAME = "input.txt";
 const string OUTPUT_FILE_NAME = "output.txt";
@@ -33,6 +35,7 @@ const int BYTE_SIZE = 8;
 const int OPPONENT_ATTCK = -1;
 const int DRAFT_TURNS = 30;
 const int MAX_GAME_CARDS = 60;
+const int MAX_BOARD_CREATURES = 6;
 
 const string EMPTY_STRING = "";
 const string SUMMON = "SUMMON";
@@ -41,8 +44,6 @@ const string SPACE = " ";
 const string END_EXPRESSION = "; ";
 
 const char GUARD = 'G';
-
-
 
 enum class GamePhase : int {
 	INVALID = -1,
@@ -223,6 +224,7 @@ void Creature::attackDirectly(string& turnCommands) {
 
 void Creature::attackCreature(Creature* oppCreture, string& turnCommands) {
 	oppCreture->setDefense(oppCreture->getDefense() - attack);
+	defense -= oppCreture->getAttack();
 
 	turnCommands +=
 		ATTACK +
@@ -244,6 +246,8 @@ class Hand {
 public:
 	Hand();
 	~Hand();
+
+	static bool comparePtrToCards(Card* a, Card* b);
 
 	void addCard(Card* card);
 	void clearCards();
@@ -271,6 +275,13 @@ Hand::~Hand() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+bool Hand::comparePtrToCards(Card* cardA, Card* cardB) {
+	return (*cardA < *cardB);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 void Hand::addCard(Card* card) {
 	cards.push_back(card);
 }
@@ -293,7 +304,7 @@ void Hand::clearCards() {
 //*************************************************************************************************************
 
 void Hand::sortCards() {
-	sort(cards.begin(), cards.end());
+	sort(cards.begin(), cards.end(), &comparePtrToCards);
 }
 
 //*************************************************************************************************************
@@ -389,39 +400,36 @@ void Board::directCreaturesAttack(string& turnCommands) {
 void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommands) {
 	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
 		Card* card = cards[cardIdx];
-		Creature* creture = dynamic_cast<Creature*>(card);
+		Creature* creature = dynamic_cast<Creature*>(card);
 
-		if (!creture) {
+		if (!creature) {
 			continue;
 		}
 
-		int target = OPPONENT_ATTCK;
+		Creature* targetOppCreature = nullptr;
 
-		Creature* oppCreture = nullptr;
+		for (int oppCardIdx = 0; oppCardIdx < opponentBoard->getCreturesCount(); ++oppCardIdx) {
+			Card* oppCard = opponentBoard->cards[oppCardIdx];
+			Creature* oppCreature = dynamic_cast<Creature*>(oppCard);
 
-		for (size_t oppCardIdx = 0; oppCardIdx < opponentBoard->cards.size(); ++oppCardIdx) {
-			Card* oppCard = opponentBoard->cards[cardIdx];
-			//cerr << oppCard->getId() << " ";
-			oppCreture = dynamic_cast<Creature*>(oppCard);
-
-			if (!oppCreture) {
+			if (!oppCreature) {
 				continue;
 			}
 
-			if (oppCreture->getDefense() > 0) {
-				target = oppCreture->getId();
+			if (oppCreature->getDefense() > 0) {
+				targetOppCreature = oppCreature;
 
-				if (oppCreture->getGuard()) {
+				if (oppCreature->getGuard()) {
 					break;
 				}
 			}
 		}
 
-		if (oppCreture) {
-			creture->attackCreature(oppCreture, turnCommands);
+		if (targetOppCreature) {
+			creature->attackCreature(targetOppCreature, turnCommands);
 		}
 		else {
-			creture->attackDirectly(turnCommands);
+			creature->attackDirectly(turnCommands);
 		}
 	}
 }
@@ -517,8 +525,8 @@ void Player::sortHand() {
 
 void Player::makeBattleTurn(const Board* opponentBoard) {
 	sortHand();
-	chooseHighestCostCreatures();
 	attack(opponentBoard);
+	chooseHighestCostCreatures();
 
 	outputTurnCommands();
 }
@@ -527,7 +535,9 @@ void Player::makeBattleTurn(const Board* opponentBoard) {
 //*************************************************************************************************************
 
 void Player::chooseHighestCostCreatures() {
-	hand.getHighestCostCreatures(mana, turnCommands);
+	if (MAX_BOARD_CREATURES > board.getCreturesCount()) {
+		hand.getHighestCostCreatures(mana, turnCommands);
+	}
 }
 
 //*************************************************************************************************************
@@ -603,6 +613,7 @@ public:
 
 	void initGame();
 	void gameBegin();
+	void gameEnd();
 	void gameLoop();
 	void getGameInput();
 	void getTurnInput();
@@ -645,7 +656,11 @@ Game::~Game() {
 //*************************************************************************************************************
 
 void Game::initGame() {
+#ifdef DEBUG_BATTLE
+	gamePhase = GamePhase::BATTLE;
+#else
 	gamePhase = GamePhase::DRAFT;
+#endif
 }
 
 //*************************************************************************************************************
@@ -657,12 +672,22 @@ void Game::gameBegin() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+void Game::gameEnd() {
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 void Game::gameLoop() {
 	while (true) {
 		turnBegin();
 		getTurnInput();
 		makeTurn();
 		turnEnd();
+
+#ifdef DEBUG_ONE_TURN
+		break;
+#endif // DEBUG_ONE_TURN
 	}
 }
 
@@ -780,6 +805,7 @@ void Game::play() {
 	getGameInput();
 	gameBegin();
 	gameLoop();
+	gameEnd();
 }
 
 //*************************************************************************************************************
@@ -827,3 +853,8 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
+
+// shufflePlayer0Seed = -5684186001621410291
+// seed = -591998440037515140
+// draftChoicesSeed = 798309110135785146
+// shufflePlayer1Seed = -4376581742357896033
