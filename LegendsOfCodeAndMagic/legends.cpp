@@ -753,6 +753,8 @@ public:
 	~Draft();
 
 	void addCardForChoosing(Card* card);
+	void addCardInChosen(int pickedCard);
+	void outputTheChoice(int pickedCard);
 	void pick();
 	void clear();
 
@@ -789,8 +791,35 @@ void Draft::addCardForChoosing(Card* card) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Draft::pick() {
+void Draft::addCardInChosen(int pickedCard) {
+	//chosenCards.push_back(cardsToChooseFrom[pickedCard]);
+}
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::outputTheChoice(int pickedCard) {
+	cout << PICK + SPACE << pickedCard << endl;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::pick() {
+	int pickedCard = 0;
+
+	for (size_t cardIdx = 0; cardIdx < cardsToChooseFrom.size(); ++cardIdx) {
+		Card* card = cardsToChooseFrom[cardIdx];
+		CardType type = card->getType();
+
+		if (CardType::CREATURE == type) {
+			pickedCard = cardIdx;
+			break;
+		}
+	}
+
+	addCardInChosen(pickedCard);
+	outputTheChoice(pickedCard);
 }
 
 //*************************************************************************************************************
@@ -798,7 +827,7 @@ void Draft::pick() {
 
 void Draft::clear() {
 	clearCardsToChooseFrom();
-	clearChosenCards();
+	//clearChosenCards();
 }
 
 //*************************************************************************************************************
@@ -1068,7 +1097,7 @@ void Game::debug() const {
 //*************************************************************************************************************
 
 void Game::switchToBattlePhase() {
-	draft.clearChosenCards();
+	//draft.clearChosenCards();
 	gamePhase = GamePhase::BATTLE;
 }
 
@@ -1107,7 +1136,7 @@ void Game::addBattleCard(Card* card) {
 			break;
 		}
 		case CardLocation::OPPONENT_BOARD: {
-			player.addCardToBoard(card);
+			opponent.addCardToBoard(card);
 			break;
 		}
 		default: {
@@ -1219,7 +1248,7 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-// shufflePlayer0Seed = -8945160174642498262
-// seed = 2260229151254511100
-// draftChoicesSeed = -1769648689152082079
-// shufflePlayer1Seed = 1926399767800745180
+//shufflePlayer0Seed = -4112529282944933822
+//seed = -6096490858822098900
+//draftChoicesSeed = 9115280734189523327
+//shufflePlayer1Seed = -8932282316776585208
