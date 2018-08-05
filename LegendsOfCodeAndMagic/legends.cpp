@@ -304,7 +304,7 @@ void Hand::clearCards() {
 //*************************************************************************************************************
 
 void Hand::sortCards() {
-	sort(cards.begin(), cards.end(), &comparePtrToCards);
+	sort(cards.rbegin(), cards.rend(), &comparePtrToCards);
 }
 
 //*************************************************************************************************************
@@ -317,7 +317,7 @@ void Hand::getHighestCostCreatures(int playerMana, string& turnCommands) {
 		Card* card = cards[cardIdx];
 		int cardManaCost = card->getCost();
 
-		if (manaToUse > cardManaCost) {
+		if (manaToUse >= cardManaCost) {
 			card->play(turnCommands);
 			manaToUse -= cardManaCost;
 		}
@@ -403,6 +403,10 @@ void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommand
 		Creature* creature = dynamic_cast<Creature*>(card);
 
 		if (!creature) {
+			continue;
+		}
+
+		if (creature->getAttack() <= 0) {
 			continue;
 		}
 
@@ -569,18 +573,18 @@ public:
 	GameState();
 	~GameState();
 
-	void addCard(
-		int instanceId,
-		int location,
-		int cardType,
-		int cost,
-		int attack,
-		int defense,
-		const string& abilities,
-		int myHealthChange,
-		int opponentHealthChange,
-		int cardDraw
-	);
+	//void addCard(
+	//	int instanceId,
+	//	int location,
+	//	int cardType,
+	//	int cost,
+	//	int attack,
+	//	int defense,
+	//	const string& abilities,
+	//	int myHealthChange,
+	//	int opponentHealthChange,
+	//	int cardDraw
+	//);
 private:
 	int cards[MAX_GAME_CARDS];
 	char abilities[MAX_GAME_CARDS];
@@ -854,7 +858,8 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-// shufflePlayer0Seed = -5684186001621410291
-// seed = -591998440037515140
-// draftChoicesSeed = 798309110135785146
-// shufflePlayer1Seed = -4376581742357896033
+// shufflePlayer0Seed = -8945160174642498262
+// seed = 2260229151254511100
+// draftChoicesSeed = -1769648689152082079
+// shufflePlayer1Seed = 1926399767800745180
+
