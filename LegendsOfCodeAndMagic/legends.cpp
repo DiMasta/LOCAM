@@ -23,31 +23,34 @@ using namespace std;
 //#define DEBUG_ONE_TURN
 //#define DEBUG_BATTLE
 
-const string INPUT_FILE_NAME = "input.txt";
-const string OUTPUT_FILE_NAME = "output.txt";
+static const string INPUT_FILE_NAME = "input.txt";
+static const string OUTPUT_FILE_NAME = "output.txt";
 
-const int INVALID_ID = -1;
-const int INVALID_NODE_DEPTH = -1;
-const int TREE_ROOT_NODE_DEPTH = 1;
-const int ZERO_CHAR = '0';
-const int DIRECTIONS_COUNT = 8;
-const int BYTE_SIZE = 8;
-const int OPPONENT_ATTCK = -1;
-const int DRAFT_TURNS = 30;
-const int MAX_GAME_CARDS = 60;
-const int MAX_BOARD_CREATURES = 6;
-const int DRAFT_CARDS_COUNT = 3;
-const int STARTING_DECK_CARDS = 30;
+static const int INVALID_ID = -1;
+static const int INVALID_NODE_DEPTH = -1;
+static const int TREE_ROOT_NODE_DEPTH = 1;
+static const int ZERO_CHAR = '0';
+static const int DIRECTIONS_COUNT = 8;
+static const int BYTE_SIZE = 8;
+static const int OPPONENT_ATTCK = -1;
+static const int DRAFT_TURNS = 30;
+static const int MAX_GAME_CARDS = 60;
+static const int MAX_BOARD_CREATURES = 6;
+static const int DRAFT_CARDS_COUNT = 3;
+static const int STARTING_DECK_CARDS = 30;
+static const int ALL_GAME_CARDS = 160;
 
-const string EMPTY_STRING = "";
-const string SUMMON = "SUMMON";
-const string ATTACK = "ATTACK";
-const string PICK = "PICK";
-const string PASS = "PASS";
-const string SPACE = " ";
-const string END_EXPRESSION = "; ";
+static const string EMPTY_STRING = "";
+static const string SUMMON = "SUMMON";
+static const string ATTACK = "ATTACK";
+static const string PICK = "PICK";
+static const string PASS = "PASS";
+static const string SPACE = " ";
+static const string END_EXPRESSION = "; ";
 
-const char GUARD = 'G';
+static const char GUARD = 'G';
+static const char WARD = 'W';
+static const char LETHAL = 'L';
 
 enum class GamePhase : int {
 	INVALID = -1,
@@ -69,6 +72,171 @@ enum class CardType : int {
 	BLUE_ITEM = 3,
 };
 
+static const float CARDS_EVALUATIONS[ALL_GAME_CARDS] = {
+	2.36905f,
+	2.38474f,
+	2.28950f,
+	2.27110f,
+	2.30357f,
+	2.27760f,
+	2.37284f,
+	2.25162f,
+	2.28517f,
+	2.31548f,
+	2.33712f,
+	2.25920f,
+	2.59091f,
+	2.49405f,
+	2.31872f,
+	2.32522f,
+	2.31872f,
+	2.48755f,
+	2.35227f,
+	2.38474f,
+	2.37825f,
+	2.36634f,
+	2.49080f,
+	2.33929f,
+	2.31548f,
+	2.44426f,
+	2.45617f,
+	2.63474f,
+	2.66071f,
+	2.59903f,
+	2.31548f,
+	2.69426f,
+	2.72781f,
+	2.66396f,
+	2.75379f,
+	3.10660f,
+	2.81439f,
+	2.43019f,
+	2.41071f,
+	2.50162f,
+	2.45617f,
+	2.34903f,
+	2.39015f,
+	2.50487f,
+	2.25325f,
+	2.37392f,
+	2.43777f,
+	2.33929f,
+	2.46807f,
+	2.36093f,
+	2.41396f,
+	2.29708f,
+	2.25595f,
+	2.28950f,
+	2.36634f,
+	2.26677f,
+	2.24080f,
+	2.43561f,
+	2.66558f,
+	2.20509f,
+	2.55790f,
+	2.87500f,
+	2.48755f,
+	2.42262f,
+	2.37284f,
+	2.29167f,
+	2.72348f,
+	2.53301f,
+	2.52327f,
+	2.53734f,
+	2.44426f,
+	2.46591f,
+	2.93994f,
+	2.59470f,
+	2.54491f,
+	2.55682f,
+	2.54058f,
+	3.05682f,
+	2.57413f,
+	3.24080f,
+	2.42370f,
+	2.64015f,
+	2.42262f,
+	2.58929f,
+	2.33496f,
+	2.35444f,
+	2.50920f,
+	2.35660f,
+	2.47024f,
+	2.22348f,
+	2.30141f,
+	2.51786f,
+	2.41071f,
+	2.39232f,
+	2.41829f,
+	2.44426f,
+	2.40639f,
+	2.38041f,
+	2.42587f,
+	2.39989f,
+	2.36851f,
+	2.48972f,
+	2.45942f,
+	2.43994f,
+	2.44751f,
+	2.47348f,
+	2.61472f,
+	2.30465f,
+	2.35227f,
+	2.29816f,
+	2.50703f,
+	2.40963f,
+	2.63041f,
+	2.54058f,
+	2.39015f,
+	3.07413f,
+	2.33929f,
+	2.27543f,
+	2.21807f,
+	2.21050f,
+	2.60877f,
+	2.34686f,
+	2.25812f,
+	2.24405f,
+	2.14232f,
+	2.16829f,
+	2.16180f,
+	2.22781f,
+	2.17587f,
+	2.57846f,
+	2.13690f,
+	2.23972f,
+	2.17478f,
+	2.53950f,
+	2.22348f,
+	2.25595f,
+	2.13907f,
+	2.63907f,
+	2.13907f,
+	2.13907f,
+	2.02219f,
+	3.13907f,
+	2.30574f,
+	1.96483f,
+	1.65530f,
+	1.90530f,
+	2.42695f,
+	2.88149f,
+	3.38907f,
+	1.83604f,
+	2.26786f,
+	1.73755f,
+	2.59740f,
+	2.80574f,
+	1.91937f,
+	2.76407f,
+	2.46861f,
+	1.70725f,
+	2.04437f,
+	2.55574f
+};
+
+map<int, bool> wardShiledsDown; 
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -79,6 +247,7 @@ public:
 	Card();
 
 	Card(
+		int cardNumber,
 		int id,
 		int cost,
 		CardType cardType,
@@ -88,7 +257,8 @@ public:
 		const string& abilities,
 		int myHealthChange,
 		int opponentHealthChange,
-		int cardDraw
+		int cardDraw,
+		float evaluation
 	);
 
 	virtual ~Card();
@@ -97,6 +267,7 @@ public:
 		return (cost < card.cost);
 	}
 
+	int getCardNumber() const { return cardNumber; }
 	int getId() const { return id; }
 	int getCost() const { return cost; }
 	CardType getType() const { return type; }
@@ -107,6 +278,11 @@ public:
 	int getMyHealthChange() const { return myHealthChange; }
 	int getOpponentHealthChange() const { return opponentHealthChange; }
 	int getCardDraw() const { return cardDraw; }
+	float getEvaluation() const { return evaluation; };
+
+	void setCardNUmber(int cardNumber) {
+		this->cardNumber = cardNumber;
+	}
 
 	void setId(int id) {
 		this->id = id;
@@ -148,9 +324,14 @@ public:
 		this->cardDraw = cardDraw;
 	}
 
+	void setEvaluation(float evaluation) {
+		this->evaluation = evaluation;
+	}
+
 	virtual void play(string& turnCommands) = 0;
 
 private:
+	int cardNumber;
 	int id;
 	int cost;
 	CardType type;
@@ -168,6 +349,7 @@ private:
 	int myHealthChange;
 	int opponentHealthChange;
 	int cardDraw;
+	float evaluation;
 };
 
 //*************************************************************************************************************
@@ -181,6 +363,7 @@ Card::Card() {
 //*************************************************************************************************************
 
 Card::Card(
+	int cardNumber,
 	int id,
 	int cost,
 	CardType type,
@@ -190,8 +373,10 @@ Card::Card(
 	const string& abilities,
 	int myHealthChange,
 	int opponentHealthChange,
-	int cardDraw
+	int cardDraw,
+	float evaluation
 ) :
+	cardNumber(cardNumber),
 	id(id),
 	cost(cost),
 	type(type),
@@ -201,7 +386,8 @@ Card::Card(
 	abilities(abilities),
 	myHealthChange(myHealthChange),
 	opponentHealthChange(opponentHealthChange),
-	cardDraw(cardDraw)
+	cardDraw(cardDraw),
+	evaluation(evaluation)
 {
 
 }
@@ -222,6 +408,7 @@ public:
 	Creature();
 
 	Creature(
+		int cardNumber,
 		int id,
 		int cost,
 		CardType type,
@@ -232,15 +419,28 @@ public:
 		int myHealthChange,
 		int opponentHealthChange,
 		int cardDraw,
-		bool guard
+		float evaluation,
+		bool guard,
+		bool ward,
+		bool lethal
 	);
 
 	~Creature();
 
 	bool getGuard() const { return guard; }
+	bool getWard() const { return ward; }
+	bool getLethal() const { return lethal; }
 
 	void setGuard(bool guard) {
 		this->guard = guard;
+	}
+
+	void setWard(bool ward) {
+		this->ward = ward;
+	}
+
+	void setLethal(bool lethal) {
+		this->lethal = lethal;
 	}
 
 	void play(string& turnCommands) override;
@@ -250,6 +450,8 @@ public:
 
 private:
 	bool guard;
+	bool ward;
+	bool lethal;
 };
 
 //*************************************************************************************************************
@@ -263,6 +465,7 @@ Creature::Creature() : Card(){
 //*************************************************************************************************************
 
 Creature::Creature(
+	int cardNumber,
 	int id,
 	int cost,
 	CardType type,
@@ -273,9 +476,13 @@ Creature::Creature(
 	int myHealthChange,
 	int opponentHealthChange,
 	int cardDraw,
-	bool guard
+	float evaluation,
+	bool guard,
+	bool ward,
+	bool lethal
 ) :
 	Card(
+		cardNumber,
 		id,
 		cost,
 		type,
@@ -285,9 +492,12 @@ Creature::Creature(
 		abilities,
 		myHealthChange,
 		opponentHealthChange,
-		cardDraw
+		cardDraw,
+		evaluation
 	),
-	guard(guard)
+	guard(guard),
+	ward(ward),
+	lethal(lethal)
 {
 
 }
@@ -323,8 +533,27 @@ void Creature::attackDirectly(string& turnCommands) {
 //*************************************************************************************************************
 
 void Creature::attackCreature(Creature* oppCreture, string& turnCommands) {
-	oppCreture->setDef(oppCreture->getDef() - getAtt());
-	setDef(getDef() - oppCreture->getAtt());
+	if (oppCreture->getWard()) {
+		oppCreture->setWard(false);
+		wardShiledsDown[oppCreture->getId()] = true;
+	}
+	else if (lethal) {
+		oppCreture->setDef(0);
+	}
+	else {
+		oppCreture->setDef(oppCreture->getDef() - getAtt());
+	}
+	
+	if (ward && oppCreture->getAtt() > 0) {
+		ward = false;
+		wardShiledsDown[getId()] = true;
+	}
+	else if (oppCreture->getLethal()) {
+		setDef(0);
+	}
+	else {
+		setDef(getDef() - oppCreture->getAtt());
+	}
 
 	turnCommands +=
 		ATTACK +
@@ -346,6 +575,7 @@ public:
 	~Item();
 
 	Item(
+		int cardNumber,
 		int id,
 		int cost,
 		CardType type,
@@ -355,7 +585,8 @@ public:
 		const string& abilities,
 		int myHealthChange,
 		int opponentHealthChange,
-		int cardDraw
+		int cardDraw,
+		float evaluation
 	);
 
 	void play(string& turnCommands);
@@ -381,6 +612,7 @@ Item::~Item() {
 //*************************************************************************************************************
 
 Item::Item(
+	int cardNumber,
 	int id,
 	int cost,
 	CardType type,
@@ -390,9 +622,11 @@ Item::Item(
 	const string& abilities,
 	int myHealthChange,
 	int opponentHealthChange,
-	int cardDraw
+	int cardDraw,
+	float evaluation
 ) :
 	Card(
+		cardNumber,
 		id,
 		cost,
 		type,
@@ -402,7 +636,8 @@ Item::Item(
 		abilities,
 		myHealthChange,
 		opponentHealthChange,
-		cardDraw
+		cardDraw,
+		evaluation
 	)
 {
 
@@ -431,7 +666,8 @@ public:
 	void addCard(Card* card);
 	void clearCards();
 	void sortCards();
-	void getHighestCostCreatures(int playerMana, string& turnCommands);
+	void playCreatures(int playerMana, string& turnCommands);
+	void playGuards(int playerMana, string& turnCommands);
 
 private:
 	Cards cards;
@@ -489,7 +725,25 @@ void Hand::sortCards() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Hand::getHighestCostCreatures(int playerMana, string& turnCommands) {
+void Hand::playGuards(int playerMana, string& turnCommands) {
+	int manaToUse = playerMana;
+
+	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
+		Card* card = cards[cardIdx];
+		int cardManaCost = card->getCost();
+
+		if (CardType::CREATURE == card->getType() && manaToUse >= cardManaCost) {
+			Creature* creature = dynamic_cast<Creature*>(card);
+
+			if (creature->getGuard()) {
+				card->play(turnCommands);
+				manaToUse -= cardManaCost;
+			}
+		}
+	}
+}
+
+void Hand::playCreatures(int playerMana, string& turnCommands) {
 	int manaToUse = playerMana;
 
 	for (size_t cardIdx = 0; cardIdx < cards.size(); ++cardIdx) {
@@ -719,7 +973,8 @@ void Player::makeBattleTurn(const Board* opponentBoard) {
 
 void Player::chooseHighestCostCreatures() {
 	if (MAX_BOARD_CREATURES > board.getCreturesCount()) {
-		hand.getHighestCostCreatures(mana, turnCommands);
+		hand.playGuards(mana, turnCommands);
+		hand.playCreatures(mana, turnCommands);
 	}
 }
 
@@ -807,14 +1062,18 @@ void Draft::outputTheChoice(int pickedCard) {
 
 void Draft::pick() {
 	int pickedCard = 0;
+	float cardEvaluation = 0;
 
 	for (size_t cardIdx = 0; cardIdx < cardsToChooseFrom.size(); ++cardIdx) {
-		Card* card = cardsToChooseFrom[cardIdx];
-		CardType type = card->getType();
+		const Card* card = cardsToChooseFrom[cardIdx];
+		const CardType type = card->getType();
+		const float evaluation = card->getEvaluation();
 
 		if (CardType::CREATURE == type) {
-			pickedCard = cardIdx;
-			break;
+			if (evaluation > cardEvaluation) {
+				pickedCard = cardIdx;
+				cardEvaluation = evaluation;
+			}
 		}
 	}
 
@@ -898,7 +1157,8 @@ public:
 		const string& abilities,
 		int myHealthChange,
 		int opponentHealthChange,
-		int cardDraw
+		int cardDraw,
+		float evaluation
 	);
 
 private:
@@ -1032,7 +1292,8 @@ void Game::getTurnInput() {
 			abilities,
 			myHealthChange,
 			opponentHealthChange,
-			cardDraw
+			cardDraw,
+			CARDS_EVALUATIONS[cardNumber - 1]
 		);
 
 		addCard(card);
@@ -1166,15 +1427,19 @@ Card* Game::createCard(
 	const string& abilities,
 	int myHealthChange,
 	int opponentHealthChange,
-	int cardDraw
+	int cardDraw,
+	float evaluation
 ) {
 	Card* card = nullptr;
 
 	switch (CardType(type)) {
 		case CardType::CREATURE: {
 			bool guard = abilities.find(GUARD) != string::npos;
+			bool ward = (abilities.find(WARD) != string::npos) && !wardShiledsDown[instanceId];
+			bool lethal = abilities.find(LETHAL) != string::npos;
 
 			card = new Creature(
+				cardNumber,
 				instanceId,
 				cost,
 				type,
@@ -1185,7 +1450,10 @@ Card* Game::createCard(
 				myHealthChange,
 				opponentHealthChange,
 				cardDraw,
-				guard
+				evaluation,
+				guard,
+				ward,
+				lethal
 			);
 
 			break;
@@ -1194,6 +1462,7 @@ Card* Game::createCard(
 		case CardType::GREEN_ITEM:
 		case CardType::BLUE_ITEM: {
 			card = new Item(
+				cardNumber,
 				instanceId,
 				cost,
 				type,
@@ -1203,7 +1472,8 @@ Card* Game::createCard(
 				abilities,
 				myHealthChange,
 				opponentHealthChange,
-				cardDraw
+				cardDraw,
+				evaluation
 			);
 
 			break;
