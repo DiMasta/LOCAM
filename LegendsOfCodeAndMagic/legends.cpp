@@ -406,7 +406,7 @@ void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommand
 			continue;
 		}
 
-		if (creature->getAttack() <= 0) {
+		if (creature->getAttack() <= 0) { 
 			continue;
 		}
 
