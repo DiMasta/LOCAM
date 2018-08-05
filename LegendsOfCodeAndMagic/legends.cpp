@@ -36,10 +36,14 @@ const int OPPONENT_ATTCK = -1;
 const int DRAFT_TURNS = 30;
 const int MAX_GAME_CARDS = 60;
 const int MAX_BOARD_CREATURES = 6;
+const int DRAFT_CARDS_COUNT = 3;
+const int STARTING_DECK_CARDS = 30;
 
 const string EMPTY_STRING = "";
 const string SUMMON = "SUMMON";
 const string ATTACK = "ATTACK";
+const string PICK = "PICK";
+const string PASS = "PASS";
 const string SPACE = " ";
 const string END_EXPRESSION = "; ";
 
@@ -51,10 +55,18 @@ enum class GamePhase : int {
 	BATTLE,
 };
 
-enum class Location : int {
+enum class CardLocation : int {
 	OPPONENT_BOARD = -1,
 	PLAYER_HAND = 0,
 	PLAYER_BOARD = 1,
+};
+
+enum class CardType : int {
+	INVALID = -1,
+	CREATURE = 0,
+	GREEN_ITEM = 1,
+	RED_ITEM = 2,
+	BLUE_ITEM = 3,
 };
 
 //-------------------------------------------------------------------------------------------------------------
@@ -68,8 +80,15 @@ public:
 
 	Card(
 		int id,
-		int cardType,
-		int cost
+		int cost,
+		CardType cardType,
+		CardLocation location,
+		int att,
+		int def,
+		const string& abilities,
+		int myHealthChange,
+		int opponentHealthChange,
+		int cardDraw
 	);
 
 	virtual ~Card();
@@ -78,16 +97,77 @@ public:
 		return (cost < card.cost);
 	}
 
-	int getId() { return id; }
-	int getCardType() { return cardType; }
-	int getCost() { return cost; }
+	int getId() const { return id; }
+	int getCost() const { return cost; }
+	CardType getType() const { return type; }
+	CardLocation getLocation() const { return location; }
+	int getAtt() const { return att; }
+	int getDef() const { return def; }
+	string getAbilities() const { return abilities; };
+	int getMyHealthChange() const { return myHealthChange; }
+	int getOpponentHealthChange() const { return opponentHealthChange; }
+	int getCardDraw() const { return cardDraw; }
+
+	void setId(int id) {
+		this->id = id;
+	}
+
+	void setCost(int cost) {
+		this->cost = cost;
+	}
+
+	void settype(CardType type) {
+		this->type = type;
+	}
+
+	void setLocation(CardLocation location) {
+		this->location = location;
+	}
+
+	void setAtt(int att) {
+		this->att = att;
+	}
+
+	void setDef(int def) {
+		this->def = def;
+	}
+
+	void setAbilities(string abilities) {
+		this->abilities = abilities;
+	}
+
+	void setMyHealthChange(int myHealthChange) {
+		this->myHealthChange = myHealthChange;
+	}
+
+	void setOpponentHealthChange(int opponentHealthChange) {
+		this->opponentHealthChange = opponentHealthChange;
+	}
+
+	void setCardDraw(int cardDraw) {
+		this->cardDraw = cardDraw;
+	}
 
 	virtual void play(string& turnCommands) = 0;
 
 private:
 	int id;
-	int cardType;
 	int cost;
+	CardType type;
+	CardLocation location;
+
+	// In case of creature this is the creature's attack points
+	// In case of item, this the item's attack modifier
+	int att;
+
+	// In case of creature, this is the creature's defense points
+	// In case of item, this the item's defense modifier
+	int def;
+
+	string abilities;
+	int myHealthChange;
+	int opponentHealthChange;
+	int cardDraw;
 };
 
 //*************************************************************************************************************
@@ -102,12 +182,26 @@ Card::Card() {
 
 Card::Card(
 	int id,
-	int cardType,
-	int cost
+	int cost,
+	CardType type,
+	CardLocation location,
+	int att,
+	int def,
+	const string& abilities,
+	int myHealthChange,
+	int opponentHealthChange,
+	int cardDraw
 ) :
 	id(id),
-	cardType(cardType),
-	cost(cost)
+	cost(cost),
+	type(type),
+	location(location),
+	att(att),
+	def(def),
+	abilities(abilities),
+	myHealthChange(myHealthChange),
+	opponentHealthChange(opponentHealthChange),
+	cardDraw(cardDraw)
 {
 
 }
@@ -129,26 +223,21 @@ public:
 
 	Creature(
 		int id,
-		int cardType,
 		int cost,
+		CardType type,
+		CardLocation location,
 		int attack,
 		int defense,
+		const string& abilities,
+		int myHealthChange,
+		int opponentHealthChange,
+		int cardDraw,
 		bool guard
 	);
 
 	~Creature();
 
-	int getAttack() const { return attack; }
-	int getDefense() const { return defense; }
 	bool getGuard() const { return guard; }
-
-	void setAttack(int attack) {
-		this->attack = attack;
-	}
-
-	void setDefense(int defense) {
-		this->defense = defense;
-	}
 
 	void setGuard(bool guard) {
 		this->guard = guard;
@@ -160,9 +249,6 @@ public:
 	void attackCreature(Creature* oppCreture, string& turnCommands);
 
 private:
-	int attack;
-	int defense;
-
 	bool guard;
 };
 
@@ -178,15 +264,29 @@ Creature::Creature() : Card(){
 
 Creature::Creature(
 	int id,
-	int cardType,
 	int cost,
+	CardType type,
+	CardLocation location,
 	int attack,
 	int defense,
+	const string& abilities,
+	int myHealthChange,
+	int opponentHealthChange,
+	int cardDraw,
 	bool guard
 ) :
-	Card(id, cardType, cost),
-	attack(attack),
-	defense(defense),
+	Card(
+		id,
+		cost,
+		type,
+		location,
+		attack,
+		defense,
+		abilities,
+		myHealthChange,
+		opponentHealthChange,
+		cardDraw
+	),
 	guard(guard)
 {
 
@@ -223,8 +323,8 @@ void Creature::attackDirectly(string& turnCommands) {
 //*************************************************************************************************************
 
 void Creature::attackCreature(Creature* oppCreture, string& turnCommands) {
-	oppCreture->setDefense(oppCreture->getDefense() - attack);
-	defense -= oppCreture->getAttack();
+	oppCreture->setDef(oppCreture->getDef() - getAtt());
+	setDef(getDef() - oppCreture->getAtt());
 
 	turnCommands +=
 		ATTACK +
@@ -233,6 +333,85 @@ void Creature::attackCreature(Creature* oppCreture, string& turnCommands) {
 		SPACE +
 		to_string(oppCreture->getId()) +
 		END_EXPRESSION;
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class Item : public Card {
+public:
+	Item();
+	~Item();
+
+	Item(
+		int id,
+		int cost,
+		CardType type,
+		CardLocation location,
+		int attackModifier,
+		int defenseModifier,
+		const string& abilities,
+		int myHealthChange,
+		int opponentHealthChange,
+		int cardDraw
+	);
+
+	void play(string& turnCommands);
+
+private:
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Item::Item() : Card() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Item::~Item() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Item::Item(
+	int id,
+	int cost,
+	CardType type,
+	CardLocation location,
+	int attackModifier,
+	int defenseModifier,
+	const string& abilities,
+	int myHealthChange,
+	int opponentHealthChange,
+	int cardDraw
+) :
+	Card(
+		id,
+		cost,
+		type,
+		location,
+		attackModifier,
+		defenseModifier,
+		abilities,
+		myHealthChange,
+		opponentHealthChange,
+		cardDraw
+	)
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Item::play(string& turnCommands) {
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -406,7 +585,7 @@ void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommand
 			continue;
 		}
 
-		if (creature->getAttack() <= 0) { 
+		if (creature->getAtt() <= 0) { 
 			continue;
 		}
 
@@ -420,7 +599,7 @@ void Board::attackCreaturesFirst(const Board* opponentBoard, string& turnCommand
 				continue;
 			}
 
-			if (oppCreature->getDefense() > 0) {
+			if (oppCreature->getDef() > 0) {
 				targetOppCreature = oppCreature;
 
 				if (oppCreature->getGuard()) {
@@ -568,41 +747,86 @@ void Player::attack(const Board* opponentBoard) {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
-class GameState {
+class Draft {
 public:
-	GameState();
-	~GameState();
+	Draft();
+	~Draft();
 
-	//void addCard(
-	//	int instanceId,
-	//	int location,
-	//	int cardType,
-	//	int cost,
-	//	int attack,
-	//	int defense,
-	//	const string& abilities,
-	//	int myHealthChange,
-	//	int opponentHealthChange,
-	//	int cardDraw
-	//);
+	void addCardForChoosing(Card* card);
+	void pick();
+	void clear();
+
+	// Two separate functions needed, because the two arrays will be deleted in different times by the Game
+	void clearCardsToChooseFrom();
+	void clearChosenCards();
+
 private:
-	int cards[MAX_GAME_CARDS];
-	char abilities[MAX_GAME_CARDS];
+	Cards cardsToChooseFrom; // Deleted each draft turn
+	Cards chosenCards; // Deleted at the end of the draft
 };
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-GameState::GameState() {
-	memset(cards, 0, sizeof(cards));
-	memset(abilities, 0, sizeof(abilities));
+Draft::Draft() {
+
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-GameState::~GameState() {
+Draft::~Draft() {
+	clear();
+}
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::addCardForChoosing(Card* card) {
+	cardsToChooseFrom.push_back(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::pick() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::clear() {
+	clearCardsToChooseFrom();
+	clearChosenCards();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::clearCardsToChooseFrom() {
+	for (size_t cardIdx = 0; cardIdx < cardsToChooseFrom.size(); ++cardIdx) {
+		if (cardsToChooseFrom[cardIdx]) {
+			delete cardsToChooseFrom[cardIdx];
+			cardsToChooseFrom[cardIdx] = nullptr;
+		}
+	}
+
+	cardsToChooseFrom.clear();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Draft::clearChosenCards() {
+	for (size_t cardIdx = 0; cardIdx < chosenCards.size(); ++cardIdx) {
+		if (chosenCards[cardIdx]) {
+			delete chosenCards[cardIdx];
+			chosenCards[cardIdx] = nullptr;
+		}
+	}
+
+	chosenCards.clear();
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -629,10 +853,29 @@ public:
 	void debug() const;
 
 	void switchToBattlePhase();
+	void addCard(Card* card);
+	void addDraftCard(Card* card);
+	void addBattleCard(Card* card);
+	void makeDraftTurn();
+
+	Card* createCard(
+		int cardNumber,
+		int instanceId,
+		CardLocation location,
+		CardType type,
+		int cost,
+		int attack,
+		int defense,
+		const string& abilities,
+		int myHealthChange,
+		int opponentHealthChange,
+		int cardDraw
+	);
 
 private:
 	int turnsCount;
 
+	Draft draft;
 	GamePhase gamePhase;
 	Player player;
 	Player opponent;
@@ -643,6 +886,7 @@ private:
 
 Game::Game() :
 	turnsCount(0),
+	draft(),
 	gamePhase(GamePhase::INVALID),
 	player(),
 	opponent()
@@ -691,7 +935,7 @@ void Game::gameLoop() {
 
 #ifdef DEBUG_ONE_TURN
 		break;
-#endif // DEBUG_ONE_TURN
+#endif
 	}
 }
 
@@ -748,22 +992,21 @@ void Game::getTurnInput() {
 #ifdef OUTPUT_GAME_DATA
 		cerr << cardNumber << " " << instanceId << " " << location << " " << cardType << " " << cost << " " << attack << " " << defense << " " << abilities << " " << myHealthChange << " " << opponentHealthChange << " " << cardDraw << endl;
 #endif
-		bool guard = abilities.find(GUARD) != string::npos;
-		if (GamePhase::BATTLE == gamePhase) {
-			Card* card = new Creature(instanceId, cardType, cost, attack, defense, guard);
+		Card* card = createCard(
+			cardNumber,
+			instanceId,
+			CardLocation(location),
+			CardType(cardType),
+			cost,
+			attack,
+			defense,
+			abilities,
+			myHealthChange,
+			opponentHealthChange,
+			cardDraw
+		);
 
-			if (Location::PLAYER_HAND == Location(location)) {
-				player.addCardToHand(card);
-			}
-
-			if (Location::PLAYER_BOARD == Location(location)) {
-				player.addCardToBoard(card);
-			}
-
-			if (Location::OPPONENT_BOARD == Location(location)) {
-				opponent.addCardToBoard(card);
-			}
-		}
+		addCard(card);
 	}
 }
 
@@ -778,7 +1021,7 @@ void Game::turnBegin() {
 
 void Game::makeTurn() {
 	if (GamePhase::DRAFT == gamePhase) {
-		cout << "PASS" << endl;
+		makeDraftTurn();
 	}
 	else {
 		player.makeBattleTurn(opponent.getBoard());
@@ -791,13 +1034,16 @@ void Game::makeTurn() {
 void Game::turnEnd() {
 	++turnsCount;
 
-	if (turnsCount >= DRAFT_TURNS) {
-		switchToBattlePhase();
-	}
-
 	if (GamePhase::BATTLE == gamePhase) {
 		player.reset();
 		opponent.reset();
+	}
+	else {
+		draft.clearCardsToChooseFrom();
+	}
+
+	if (turnsCount >= DRAFT_TURNS) {
+		switchToBattlePhase();
 	}
 }
 
@@ -822,7 +1068,122 @@ void Game::debug() const {
 //*************************************************************************************************************
 
 void Game::switchToBattlePhase() {
+	draft.clearChosenCards();
 	gamePhase = GamePhase::BATTLE;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::addCard(Card* card) {
+	if (GamePhase::DRAFT == gamePhase) {
+		addDraftCard(card);
+	}
+	else if (GamePhase::BATTLE == gamePhase) {
+		addBattleCard(card);
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::addDraftCard(Card* card) {
+	draft.addCardForChoosing(card);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::addBattleCard(Card* card) {
+	CardLocation location = card->getLocation();
+
+	switch (location) {
+		case CardLocation::PLAYER_HAND: {
+			player.addCardToHand(card);
+			break;
+		}
+		case CardLocation::PLAYER_BOARD: {
+			player.addCardToBoard(card);
+			break;
+		}
+		case CardLocation::OPPONENT_BOARD: {
+			player.addCardToBoard(card);
+			break;
+		}
+		default: {
+			break;
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::makeDraftTurn() {
+	draft.pick();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Card* Game::createCard(
+	int cardNumber,
+	int instanceId,
+	CardLocation location,
+	CardType type,
+	int cost,
+	int att,
+	int def,
+	const string& abilities,
+	int myHealthChange,
+	int opponentHealthChange,
+	int cardDraw
+) {
+	Card* card = nullptr;
+
+	switch (CardType(type)) {
+		case CardType::CREATURE: {
+			bool guard = abilities.find(GUARD) != string::npos;
+
+			card = new Creature(
+				instanceId,
+				cost,
+				type,
+				location,
+				att,
+				def,
+				abilities,
+				myHealthChange,
+				opponentHealthChange,
+				cardDraw,
+				guard
+			);
+
+			break;
+		}
+		case CardType::RED_ITEM:
+		case CardType::GREEN_ITEM:
+		case CardType::BLUE_ITEM: {
+			card = new Item(
+				instanceId,
+				cost,
+				type,
+				location,
+				att,
+				def,
+				abilities,
+				myHealthChange,
+				opponentHealthChange,
+				cardDraw
+			);
+
+			break;
+		}
+		default: {
+		}
+	}
+
+	return card;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -862,4 +1223,3 @@ int main(int argc, char** argv) {
 // seed = 2260229151254511100
 // draftChoicesSeed = -1769648689152082079
 // shufflePlayer1Seed = 1926399767800745180
-
