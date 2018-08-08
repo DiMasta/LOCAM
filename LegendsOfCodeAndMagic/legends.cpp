@@ -17,7 +17,7 @@
 
 using namespace std;
 
-//#define OUTPUT_GAME_DATA
+#define OUTPUT_GAME_DATA
 //#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
 //#define DEBUG_ONE_TURN
@@ -1518,7 +1518,7 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-//shufflePlayer0Seed = -4112529282944933822
-//seed = -6096490858822098900
-//draftChoicesSeed = 9115280734189523327
-//shufflePlayer1Seed = -8932282316776585208
+// shufflePlayer0Seed = -781104924512814143
+// seed = -388325619875001980
+// draftChoicesSeed = 7503261107366343350
+// shufflePlayer1Seed = -4630844502291892258
