@@ -17,11 +17,11 @@
 
 using namespace std;
 
-#define OUTPUT_GAME_DATA
-#define REDIRECT_CIN_FROM_FILE
+//#define OUTPUT_GAME_DATA
+//#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
-#define DEBUG_ONE_TURN
-#define DEBUG_BATTLE
+//#define DEBUG_ONE_TURN
+//#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -38,7 +38,7 @@ static const int MAX_GAME_CARDS = 60;
 static const int MAX_BOARD_CREATURES = 6;
 static const int DRAFT_CARDS_COUNT = 3;
 static const int STARTING_DECK_CARDS = 30;
-static const int ALL_GAME_CARDS = 160;
+static const int ALL_GAME_CARDS_COUNT = 160;
 static const int MAX_CARDS_IN_HAND = 8;
 static const int DEFAULT_CARD_TEMPLATE = 0;
 
@@ -63,6 +63,7 @@ enum class GamePhase : int {
 };
 
 enum class CardLocation : int {
+	INVALID = -2,
 	OPPONENT_BOARD = -1,
 	PLAYER_HAND = 0,
 	PLAYER_BOARD = 1,
@@ -83,169 +84,6 @@ namespace CardMasks {
 
 	static const int NUMBER = 255;	// 0000 0000 0000 0000 0000 0000 1111 1111
 	static const int ID = 258048;	// 0000 0000 0000 0000 0011 1111 0000 0000
-};
-
-static const float CARDS_VALUES[ALL_GAME_CARDS] = {
-	2.36905f,
-	2.38474f,
-	2.28950f,
-	2.27110f,
-	2.30357f,
-	2.27760f,
-	2.37284f,
-	2.25162f,
-	2.28517f,
-	2.31548f,
-	2.33712f,
-	2.25920f,
-	2.59091f,
-	2.49405f,
-	2.31872f,
-	2.32522f,
-	2.31872f,
-	2.48755f,
-	2.35227f,
-	2.38474f,
-	2.37825f,
-	2.36634f,
-	2.49080f,
-	2.33929f,
-	2.31548f,
-	2.44426f,
-	2.45617f,
-	2.63474f,
-	2.66071f,
-	2.59903f,
-	2.31548f,
-	2.69426f,
-	2.72781f,
-	2.66396f,
-	2.75379f,
-	3.10660f,
-	2.81439f,
-	2.43019f,
-	2.41071f,
-	2.50162f,
-	2.45617f,
-	2.34903f,
-	2.39015f,
-	2.50487f,
-	2.25325f,
-	2.37392f,
-	2.43777f,
-	2.33929f,
-	2.46807f,
-	2.36093f,
-	2.41396f,
-	2.29708f,
-	2.25595f,
-	2.28950f,
-	2.36634f,
-	2.26677f,
-	2.24080f,
-	2.43561f,
-	2.66558f,
-	2.20509f,
-	2.55790f,
-	2.87500f,
-	2.48755f,
-	2.42262f,
-	2.37284f,
-	2.29167f,
-	2.72348f,
-	2.53301f,
-	2.52327f,
-	2.53734f,
-	2.44426f,
-	2.46591f,
-	2.93994f,
-	2.59470f,
-	2.54491f,
-	2.55682f,
-	2.54058f,
-	3.05682f,
-	2.57413f,
-	3.24080f,
-	2.42370f,
-	2.64015f,
-	2.42262f,
-	2.58929f,
-	2.33496f,
-	2.35444f,
-	2.50920f,
-	2.35660f,
-	2.47024f,
-	2.22348f,
-	2.30141f,
-	2.51786f,
-	2.41071f,
-	2.39232f,
-	2.41829f,
-	2.44426f,
-	2.40639f,
-	2.38041f,
-	2.42587f,
-	2.39989f,
-	2.36851f,
-	2.48972f,
-	2.45942f,
-	2.43994f,
-	2.44751f,
-	2.47348f,
-	2.61472f,
-	2.30465f,
-	2.35227f,
-	2.29816f,
-	2.50703f,
-	2.40963f,
-	2.63041f,
-	2.54058f,
-	2.39015f,
-	3.07413f,
-	2.33929f,
-	2.27543f,
-	2.21807f,
-	2.21050f,
-	2.60877f,
-	2.34686f,
-	2.25812f,
-	2.24405f,
-	2.14232f,
-	2.16829f,
-	2.16180f,
-	2.22781f,
-	2.17587f,
-	2.57846f,
-	2.13690f,
-	2.23972f,
-	2.17478f,
-	2.53950f,
-	2.22348f,
-	2.25595f,
-	2.13907f,
-	2.63907f,
-	2.13907f,
-	2.13907f,
-	2.02219f,
-	3.13907f,
-	2.30574f,
-	1.96483f,
-	1.65530f,
-	1.90530f,
-	2.42695f,
-	2.88149f,
-	3.38907f,
-	1.83604f,
-	2.26786f,
-	1.73755f,
-	2.59740f,
-	2.80574f,
-	1.91937f,
-	2.76407f,
-	2.46861f,
-	1.70725f,
-	2.04437f,
-	2.55574f
 };
 
 //-------------------------------------------------------------------------------------------------------------
@@ -400,11 +238,190 @@ Card::Card(
 {
 
 }
+
 //*************************************************************************************************************
 //*************************************************************************************************************
 
 Card::~Card() {
 
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+struct AllCardsHolder {
+	Card allGameCards[ALL_GAME_CARDS_COUNT + 1];
+
+	void initCards();
+}ALL_CARDS_HOLDER;
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void AllCardsHolder::initCards() {
+	allGameCards[0] = Card();
+	allGameCards[1] = Card(1,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	2,	1,		"------",	1	,0	,0	,2.36905f);
+	allGameCards[2] = Card(2,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	1,	2,		"------",	0	,-1	,0	,2.38474f);
+	allGameCards[3] = Card(3,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"------",	0	,0	,0	,2.28950f);
+	allGameCards[4] = Card(4,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	5,		"------",	0	,0	,0	,2.27110f);
+	allGameCards[5] = Card(5,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	4,	1,		"------",	0	,0	,0	,2.30357f);
+	allGameCards[6] = Card(6,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"------",	0	,0	,0	,2.27760f);
+	allGameCards[7] = Card(7,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"-----W",	0	,0	,0	,2.37284f);
+	allGameCards[8] = Card(8,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	3,		"------",	0	,0	,0	,2.25162f);
+	allGameCards[9] = Card(9,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	4,		"------",	0	,0	,0	,2.28517f);
+	allGameCards[10] = Card(10,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	1,		"--D---",	0	,0	,0	,2.31548f);
+	allGameCards[11] = Card(11,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	5,	2,		"------",	0	,0	,0	,2.33712f);
+	allGameCards[12] = Card(12,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	5,		"------",	0	,0	,0	,2.25920f);
+	allGameCards[13] = Card(13,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	5,	3,		"------",	1	,-1	,0	,2.59091f);
+	allGameCards[14] = Card(14,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	9,	1,		"------",	0	,0	,0	,2.49405f);
+	allGameCards[15] = Card(15,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	5,		"------",	0	,0	,0	,2.31872f);
+	allGameCards[16] = Card(16,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	6,	2,		"------",	0	,0	,0	,2.32522f);
+	allGameCards[17] = Card(17,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	5,		"------",	0	,0	,0	,2.31872f);
+	allGameCards[18] = Card(18,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	7,	4,		"------",	0	,0	,0	,2.48755f);
+	allGameCards[19] = Card(19,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	5,	6,		"------",	0	,0	,0	,2.35227f);
+	allGameCards[20] = Card(20,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	8,	2,		"------",	0	,0	,0	,2.38474f);
+	allGameCards[21] = Card(21,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	6,	5,		"------",	0	,0	,0	,2.37825f);
+	allGameCards[22] = Card(22,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	7,	5,		"------",	0	,0	,0	,2.36634f);
+	allGameCards[23] = Card(23,		INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	8,	8,		"------",	0	,0	,0	,2.49080f);
+	allGameCards[24] = Card(24,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"------",	0	,-1	,0	,2.33929f);
+	allGameCards[25] = Card(25,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	3,	1,		"------",	-2	,-2	,0	,2.31548f);
+	allGameCards[26] = Card(26,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"------",	0	,-1	,0	,2.44426f);
+	allGameCards[27] = Card(27,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"------",	2	,0	,0	,2.45617f);
+	allGameCards[28] = Card(28,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	2,		"------",	0	,0	,1	,2.63474f);
+	allGameCards[29] = Card(29,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	1,		"------",	0	,0	,1	,2.66071f);
+	allGameCards[30] = Card(30,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	4,	2,		"------",	0	,-2	,0	,2.59903f);
+	allGameCards[31] = Card(31,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	1,		"------",	0	,-1	,0	,2.31548f);
+	allGameCards[32] = Card(32,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"------",	0	,0	,1	,2.69426f);
+	allGameCards[33] = Card(33,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	3,		"------",	0	,0	,1	,2.72781f);
+	allGameCards[34] = Card(34,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	3,	5,		"------",	0	,0	,1	,2.66396f);
+	allGameCards[35] = Card(35,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	2,		"B-----",	0	,0	,1	,2.75379f);
+	allGameCards[36] = Card(36,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	4,	4,		"------",	0	,0	,2	,3.10660f);
+	allGameCards[37] = Card(37,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	7,		"------",	0	,0	,1	,2.81439f);
+	allGameCards[38] = Card(38,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	1,	3,		"--D---",	0	,0	,0	,2.43019f);
+	allGameCards[39] = Card(39,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	2,	1,		"--D---",	0	,0	,0	,2.41071f);
+	allGameCards[40] = Card(40,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	3,		"--DG--",	0	,0	,0	,2.50162f);
+	allGameCards[41] = Card(41,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"-CD---",	0	,0	,0	,2.45617f);
+	allGameCards[42] = Card(42,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	2,		"--D---",	0	,0	,0	,2.34903f);
+	allGameCards[43] = Card(43,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"--D---",	0	,0	,0	,2.39015f);
+	allGameCards[44] = Card(44,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	3,	7,		"--D-L-",	0	,0	,0	,2.50487f);
+	allGameCards[45] = Card(45,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	6,	5,		"B-D---",	-3	,0	,0	,2.25325f);
+	allGameCards[46] = Card(46,		INVALID_ID,	9,	CardType::CREATURE,		CardLocation::INVALID,	7,	7,		"--D---",	0	,0	,0	,2.37392f);
+	allGameCards[47] = Card(47,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	5,		"--D---",	0	,0	,0	,2.43777f);
+	allGameCards[48] = Card(48,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"----L-",	0	,0	,0	,2.33929f);
+	allGameCards[49] = Card(49,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	2,		"---GL-",	0	,0	,0	,2.46807f);
+	allGameCards[50] = Card(50,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"----L-",	0	,0	,0	,2.36093f);
+	allGameCards[51] = Card(51,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	3,	5,		"----L-",	0	,0	,0	,2.41396f);
+	allGameCards[52] = Card(52,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	2,	4,		"----L-",	0	,0	,0	,2.29708f);
+	allGameCards[53] = Card(53,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"-C--L-",	0	,0	,0	,2.25595f);
+	allGameCards[54] = Card(54,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"----L-",	0	,0	,0	,2.28950f);
+	allGameCards[55] = Card(55,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	0,	5,		"---G--",	0	,0	,0	,2.36634f);
+	allGameCards[56] = Card(56,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	2,	7,		"------",	0	,0	,0	,2.26677f);
+	allGameCards[57] = Card(57,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	1,	8,		"------",	0	,0	,0	,2.24080f);
+	allGameCards[58] = Card(58,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	6,		"B-----",	0	,0	,0	,2.43561f);
+	allGameCards[59] = Card(59,		INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	7,	7,		"------",	1	,-1	,0	,2.66558f);
+	allGameCards[60] = Card(60,		INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	4,	8,		"------",	0	,0	,0	,2.20509f);
+	allGameCards[61] = Card(61,		INVALID_ID,	9,	CardType::CREATURE,		CardLocation::INVALID,	10,	10,		"------",	0	,0	,0	,2.55790f);
+	allGameCards[62] = Card(62,		INVALID_ID,	12,	CardType::CREATURE,		CardLocation::INVALID,	12,	12,		"B--G--",	0	,0	,0	,2.87500f);
+	allGameCards[63] = Card(63,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	0,	4,		"---G-W",	0	,0	,0	,2.48755f);
+	allGameCards[64] = Card(64,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"---G-W",	0	,0	,0	,2.42262f);
+	allGameCards[65] = Card(65,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	2,		"-----W",	0	,0	,0	,2.37284f);
+	allGameCards[66] = Card(66,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	5,	1,		"-----W",	0	,0	,0	,2.29167f);
+	allGameCards[67] = Card(67,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"-----W",	0	,-2	,0	,2.72348f);
+	allGameCards[68] = Card(68,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	7,	5,		"-----W",	0	,0	,0	,2.53301f);
+	allGameCards[69] = Card(69,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	4,	4,		"B-----",	0	,0	,0	,2.52327f);
+	allGameCards[70] = Card(70,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	6,	3,		"B-----",	0	,0	,0	,2.53734f);
+	allGameCards[71] = Card(71,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"BC----",	0	,0	,0	,2.44426f);
+	allGameCards[72] = Card(72,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	5,	3,		"B-----",	0	,0	,0	,2.46591f);
+	allGameCards[73] = Card(73,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	4,		"B-----",	4	,0	,0	,2.93994f);
+	allGameCards[74] = Card(74,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	5,	4,		"B--G--",	0	,0	,0	,2.59470f);
+	allGameCards[75] = Card(75,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	6,	5,		"B-----",	0	,0	,0	,2.54491f);
+	allGameCards[76] = Card(76,		INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"B-D---",	0	,0	,0	,2.55682f);
+	allGameCards[77] = Card(77,		INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	7,	7,		"B-----",	0	,0	,0	,2.54058f);
+	allGameCards[78] = Card(78,		INVALID_ID,	8,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"B-----",	0	,-5	,0	,3.05682f);
+	allGameCards[79] = Card(79,		INVALID_ID,	8,	CardType::CREATURE,		CardLocation::INVALID,	8,	8,		"B-----",	0	,0	,0	,2.57413f);
+	allGameCards[80] = Card(80,		INVALID_ID,	8,	CardType::CREATURE,		CardLocation::INVALID,	8,	8,		"B--G--",	0	,0	,1	,3.24080f);
+	allGameCards[81] = Card(81,		INVALID_ID,	9,	CardType::CREATURE,		CardLocation::INVALID,	6,	6,		"BC----",	0	,0	,0	,2.42370f);
+	allGameCards[82] = Card(82,		INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"B-D--W",	0	,0	,0	,2.64015f);
+	allGameCards[83] = Card(83,		INVALID_ID,	0,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"-C----",	0	,0	,0	,2.42262f);
+	allGameCards[84] = Card(84,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	1,		"-CD--W",	0	,0	,0	,2.58929f);
+	allGameCards[85] = Card(85,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	3,		"-C----",	0	,0	,0	,2.33496f);
+	allGameCards[86] = Card(86,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	1,	5,		"-C----",	0	,0	,0	,2.35444f);
+	allGameCards[87] = Card(87,		INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	2,	5,		"-C-G--",	0	,0	,0	,2.50920f);
+	allGameCards[88] = Card(88,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	4,	4,		"-C----",	0	,0	,0	,2.35660f);
+	allGameCards[89] = Card(89,		INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	4,	1,		"-C----",	2	,0	,0	,2.47024f);
+	allGameCards[90] = Card(90,		INVALID_ID,	8,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"-C----",	0	,0	,0	,2.22348f);
+	allGameCards[91] = Card(91,		INVALID_ID,	0,	CardType::CREATURE,		CardLocation::INVALID,	1,	2,		"---G--",	0	,1	,0	,2.30141f);
+	allGameCards[92] = Card(92,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	0,	1,		"---G--",	2	,0	,0	,2.51786f);
+	allGameCards[93] = Card(93,		INVALID_ID,	1,	CardType::CREATURE,		CardLocation::INVALID,	2,	1,		"---G--",	0	,0	,0	,2.41071f);
+	allGameCards[94] = Card(94,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	1,	4,		"---G--",	0	,0	,0	,2.39232f);
+	allGameCards[95] = Card(95,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	2,	3,		"---G--",	0	,0	,0	,2.41829f);
+	allGameCards[96] = Card(96,		INVALID_ID,	2,	CardType::CREATURE,		CardLocation::INVALID,	3,	2,		"---G--",	0	,0	,0	,2.44426f);
+	allGameCards[97] = Card(97,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	3,	3,		"---G--",	0	,0	,0	,2.40639f);
+	allGameCards[98] = Card(98,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	4,		"---G--",	0	,0	,0	,2.38041f);
+	allGameCards[99] = Card(99,		INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	2,	5,		"---G--",	0	,0	,0	,2.42587f);
+	allGameCards[100] = Card(100,	INVALID_ID,	3,	CardType::CREATURE,		CardLocation::INVALID,	1,	6,		"---G--",	0	,0	,0	,2.39989f);
+	allGameCards[101] = Card(101,	INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	3,	4,		"---G--",	0	,0	,0	,2.36851f);
+	allGameCards[102] = Card(102,	INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	3,	3,		"---G--",	0	,-1	,0	,2.48972f);
+	allGameCards[103] = Card(103,	INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	3,	6,		"---G--",	0	,0	,0	,2.45942f);
+	allGameCards[104] = Card(104,	INVALID_ID,	4,	CardType::CREATURE,		CardLocation::INVALID,	4,	4,		"---G--",	0	,0	,0	,2.43994f);
+	allGameCards[105] = Card(105,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	4,	6,		"---G--",	0	,0	,0	,2.44751f);
+	allGameCards[106] = Card(106,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"---G--",	0	,0	,0	,2.47348f);
+	allGameCards[107] = Card(107,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	3,	3,		"---G--",	3	,0	,0	,2.61472f);
+	allGameCards[108] = Card(108,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	2,	6,		"---G--",	0	,0	,0	,2.30465f);
+	allGameCards[109] = Card(109,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	5,	6,		"------",	0	,0	,0	,2.35227f);
+	allGameCards[110] = Card(110,	INVALID_ID,	5,	CardType::CREATURE,		CardLocation::INVALID,	0,	9,		"---G--",	0	,0	,0	,2.29816f);
+	allGameCards[111] = Card(111,	INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	6,	6,		"---G--",	0	,0	,0	,2.50703f);
+	allGameCards[112] = Card(112,	INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	4,	7,		"---G--",	0	,0	,0	,2.40963f);
+	allGameCards[113] = Card(113,	INVALID_ID,	6,	CardType::CREATURE,		CardLocation::INVALID,	2,	4,		"---G--",	4	,0	,0	,2.63041f);
+	allGameCards[114] = Card(114,	INVALID_ID,	7,	CardType::CREATURE,		CardLocation::INVALID,	7,	7,		"---G--",	0	,0	,0	,2.54058f);
+	allGameCards[115] = Card(115,	INVALID_ID,	8,	CardType::CREATURE,		CardLocation::INVALID,	5,	5,		"---G-W",	0	,0	,0	,2.39015f);
+	allGameCards[116] = Card(116,	INVALID_ID,	12,	CardType::CREATURE,		CardLocation::INVALID,	8,	8,		"BCDGLW",	0	,0	,0	,3.07413f);
+	allGameCards[117] = Card(117,	INVALID_ID,	1,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	1,		"B-----",	0	,0	,0	,2.33929f);
+	allGameCards[118] = Card(118,	INVALID_ID,	0,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	3,		"------",	0	,0	,0	,2.27543f);
+	allGameCards[119] = Card(119,	INVALID_ID,	1,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	2,		"------",	0	,0	,0	,2.21807f);
+	allGameCards[120] = Card(120,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	0,		"----L-",	0	,0	,0	,2.21050f);
+	allGameCards[121] = Card(121,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	3,		"------",	0	,0	,1	,2.60877f);
+	allGameCards[122] = Card(122,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	3,		"---G--",	0	,0	,0	,2.34686f);
+	allGameCards[123] = Card(123,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	4,	0,		"------",	0	,0	,0	,2.25812f);
+	allGameCards[124] = Card(124,	INVALID_ID,	3,	CardType::GREEN_ITEM,	CardLocation::INVALID,	2,	1,		"--D---",	0	,0	,0	,2.24405f);
+	allGameCards[125] = Card(125,	INVALID_ID,	3,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	4,		"------",	0	,0	,0	,2.14232f);
+	allGameCards[126] = Card(126,	INVALID_ID,	3,	CardType::GREEN_ITEM,	CardLocation::INVALID,	2,	3,		"------",	0	,0	,0	,2.16829f);
+	allGameCards[127] = Card(127,	INVALID_ID,	3,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	6,		"------",	0	,0	,0	,2.16180f);
+	allGameCards[128] = Card(128,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	4,	3,		"------",	0	,0	,0	,2.22781f);
+	allGameCards[129] = Card(129,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	2,	5,		"------",	0	,0	,0	,2.17587f);
+	allGameCards[130] = Card(130,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	6,		"------",	4	,0	,0	,2.57846f);
+	allGameCards[131] = Card(131,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	4,	1,		"------",	0	,0	,0	,2.13690f);
+	allGameCards[132] = Card(132,	INVALID_ID,	5,	CardType::GREEN_ITEM,	CardLocation::INVALID,	3,	3,		"B-----",	0	,0	,0	,2.23972f);
+	allGameCards[133] = Card(133,	INVALID_ID,	5,	CardType::GREEN_ITEM,	CardLocation::INVALID,	4,	0,		"-----W",	0	,0	,0	,2.17478f);
+	allGameCards[134] = Card(134,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	2,	2,		"------",	0	,0	,1	,2.53950f);
+	allGameCards[135] = Card(135,	INVALID_ID,	6,	CardType::GREEN_ITEM,	CardLocation::INVALID,	5,	5,		"------",	0	,0	,0	,2.22348f);
+	allGameCards[136] = Card(136,	INVALID_ID,	0,	CardType::GREEN_ITEM,	CardLocation::INVALID,	1,	1,		"------",	0	,0	,0	,2.25595f);
+	allGameCards[137] = Card(137,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	0,		"-----W",	0	,0	,0	,2.13907f);
+	allGameCards[138] = Card(138,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	0,		"---G--",	0	,0	,1	,2.63907f);
+	allGameCards[139] = Card(139,	INVALID_ID,	4,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	0,		"----LW",	0	,0	,0	,2.13907f);
+	allGameCards[140] = Card(140,	INVALID_ID,	2,	CardType::GREEN_ITEM,	CardLocation::INVALID,	0,	0,		"-C----",	0	,0	,0	,2.13907f);
+	allGameCards[141] = Card(141,	INVALID_ID,	0,	CardType::RED_ITEM,		CardLocation::INVALID,	-1,	-1,		"------",	0	,0	,0	,2.02219f);
+	allGameCards[142] = Card(142,	INVALID_ID,	0,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	0,		"BCDGLW",	0	,0	,0	,3.13907f);
+	allGameCards[143] = Card(143,	INVALID_ID,	0,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	0,		"---G--",	0	,0	,0	,2.30574f);
+	allGameCards[144] = Card(144,	INVALID_ID,	1,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-2,		"------",	0	,0	,0	,1.96483f);
+	allGameCards[145] = Card(145,	INVALID_ID,	3,	CardType::RED_ITEM,		CardLocation::INVALID,	-2,	-2,		"------",	0	,0	,0	,1.65530f);
+	allGameCards[146] = Card(146,	INVALID_ID,	4,	CardType::RED_ITEM,		CardLocation::INVALID,	-2,	-2,		"------",	0	,-2	,0	,1.90530f);
+	allGameCards[147] = Card(147,	INVALID_ID,	2,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-1,		"------",	0	,0	,1	,2.42695f);
+	allGameCards[148] = Card(148,	INVALID_ID,	2,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-2,		"BCDGLW",	0	,0	,0	,2.88149f);
+	allGameCards[149] = Card(149,	INVALID_ID,	3,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	0,		"BCDGLW",	0	,0	,1	,3.38907f);
+	allGameCards[150] = Card(150,	INVALID_ID,	2,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-3,		"------",	0	,0	,0	,1.83604f);
+	allGameCards[151] = Card(151,	INVALID_ID,	5,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-10,	"BCDGLW",	0	,0	,0	,2.26786f);
+	allGameCards[152] = Card(152,	INVALID_ID,	7,	CardType::RED_ITEM,		CardLocation::INVALID,	0,	-7,		"------",	0	,0	,1	,1.73755f);
+	allGameCards[153] = Card(153,	INVALID_ID,	2,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	0,		"------",	5	,0	,0	,2.59740f);
+	allGameCards[154] = Card(154,	INVALID_ID,	2,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	0,		"------",	0	,-2	,1	,2.80574f);
+	allGameCards[155] = Card(155,	INVALID_ID,	3,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	-3,		"------",	0	,-1	,0	,1.91937f);
+	allGameCards[156] = Card(156,	INVALID_ID,	3,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	0,		"------",	3	,-3	,0	,2.76407f);
+	allGameCards[157] = Card(157,	INVALID_ID,	3,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	-1,		"------",	1	,0	,1	,2.46861f);
+	allGameCards[158] = Card(158,	INVALID_ID,	3,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	-4,		"------",	0	,0	,0	,1.70725f);
+	allGameCards[159] = Card(159,	INVALID_ID,	4,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	-3,		"------",	3	,0	,0	,2.04437f);
+	allGameCards[160] = Card(160,	INVALID_ID,	2,	CardType::BLUE_ITEM,	CardLocation::INVALID,	0,	0,		"------",	2	,-2	,0	,2.55574f);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -671,6 +688,7 @@ public:
 	void addDraftCard(const CardValue& draftCard);
 	void addBattleCard(const Card& card);
 	void makeDraftTurn();
+	void createAllGameCards();
 
 	Card createCard(
 		int cardNumber,
@@ -728,6 +746,8 @@ void Game::initGame() {
 #else
 	gamePhase = GamePhase::DRAFT;
 #endif
+
+	createAllGameCards();
 }
 
 //*************************************************************************************************************
@@ -819,7 +839,7 @@ void Game::getTurnInput() {
 			myHealthChange,
 			opponentHealthChange,
 			cardDraw,
-			CARDS_VALUES[cardNumber - 1]
+			ALL_CARDS_HOLDER.allGameCards[cardNumber].getValue()
 		);
 
 		addCard(card);
@@ -933,6 +953,13 @@ void Game::addBattleCard(const Card& card) {
 
 void Game::makeDraftTurn() {
 	draft.pick();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::createAllGameCards() {
+	ALL_CARDS_HOLDER.initCards();
 }
 
 //*************************************************************************************************************
