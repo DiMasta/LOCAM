@@ -17,11 +17,11 @@
 
 using namespace std;
 
-//#define OUTPUT_GAME_DATA
-//#define REDIRECT_CIN_FROM_FILE
+#define OUTPUT_GAME_DATA
+#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
-//#define DEBUG_ONE_TURN
-//#define DEBUG_BATTLE
+#define DEBUG_ONE_TURN
+#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -39,6 +39,8 @@ static const int MAX_BOARD_CREATURES = 6;
 static const int DRAFT_CARDS_COUNT = 3;
 static const int STARTING_DECK_CARDS = 30;
 static const int ALL_GAME_CARDS = 160;
+static const int MAX_CARDS_IN_HAND = 8;
+static const int DEFAULT_CARD_TEMPLATE = 0;
 
 static const float INVALID_CARD_VALUE = -1.f;
 
@@ -72,6 +74,15 @@ enum class CardType : int {
 	GREEN_ITEM = 1,
 	RED_ITEM = 2,
 	BLUE_ITEM = 3,
+};
+
+namespace CardMasks {
+	static const int NUMBER_OFFSET = 0;
+	static const int ID_OFFSET = 8;
+	
+
+	static const int NUMBER = 255;	// 0000 0000 0000 0000 0000 0000 1111 1111
+	static const int ID = 258048;	// 0000 0000 0000 0000 0011 1111 0000 0000
 };
 
 static const float CARDS_VALUES[ALL_GAME_CARDS] = {
@@ -530,6 +541,113 @@ void Draft::clearCardsToChooseFrom() {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
+class HandCard {
+public:
+	HandCard();
+
+	HandCard(
+		int number,
+		int id
+	);
+
+	~HandCard();
+
+	void create(
+		int number,
+		int id
+	);
+
+private:
+	int card;
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+HandCard::HandCard() :
+	card(DEFAULT_CARD_TEMPLATE)
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+HandCard::HandCard(
+	int number,
+	int id
+) :
+	card(DEFAULT_CARD_TEMPLATE)
+{
+	create(number, id);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+HandCard::~HandCard() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void HandCard::create(
+	int number,
+	int id
+) {
+	card = number;
+
+	id <<= CardMasks::ID_OFFSET;
+	card |= id;
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class Hand {
+public:
+	Hand();
+	~Hand();
+
+	void addCard(const HandCard& card);
+
+private:
+	HandCard cards[MAX_CARDS_IN_HAND];
+	int cardsCount;
+	//char playedCards; 0100 00011
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Hand::Hand() :
+	cardsCount(0)
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Hand::~Hand() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::addCard(const HandCard& card) {
+	cards[cardsCount++] = card;
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
 class Game {
 public:
 	Game();
@@ -549,12 +667,12 @@ public:
 	void debug() const;
 
 	void switchToBattlePhase();
-	void addCard(Card* card);
+	void addCard(const Card& card);
 	void addDraftCard(const CardValue& draftCard);
-	void addBattleCard(Card* card);
+	void addBattleCard(const Card& card);
 	void makeDraftTurn();
 
-	Card* createCard(
+	Card createCard(
 		int cardNumber,
 		int instanceId,
 		int cost,
@@ -576,9 +694,11 @@ private:
 	GamePhase gamePhase;
 
 	// Hand ([8] cards; make playable card combinations; playCard())
+	Hand hand;
+
 	// Board ([6] [6] creatures; make attacks)
-	// Player (health + mana)
-	// Opponent (health + mana)
+	// Player (health + mana; play cards)
+	// !? Opponent (health + mana)
 };
 
 //*************************************************************************************************************
@@ -587,7 +707,8 @@ private:
 Game::Game() :
 	turnsCount(0),
 	draft(),
-	gamePhase(GamePhase::INVALID)
+	gamePhase(GamePhase::INVALID),
+	hand()
 {
 
 }
@@ -686,7 +807,7 @@ void Game::getTurnInput() {
 #ifdef OUTPUT_GAME_DATA
 		cerr << cardNumber << " " << instanceId << " " << location << " " << cardType << " " << cost << " " << attack << " " << defense << " " << abilities << " " << myHealthChange << " " << opponentHealthChange << " " << cardDraw << endl;
 #endif
-		Card* card = createCard(
+		Card card = createCard(
 			cardNumber,
 			instanceId,
 			cost,
@@ -766,9 +887,9 @@ void Game::switchToBattlePhase() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Game::addCard(Card* card) {
+void Game::addCard(const Card& card) {
 	if (GamePhase::DRAFT == gamePhase) {
-		CardValue draftCard(card->getNumber(), card->getValue());
+		CardValue draftCard(card.getNumber(), card.getValue());
 		addDraftCard(draftCard);
 	}
 	else if (GamePhase::BATTLE == gamePhase) {
@@ -786,11 +907,13 @@ void Game::addDraftCard(const CardValue& draftCard) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Game::addBattleCard(Card* card) {
-	CardLocation location = card->getLocation();
+void Game::addBattleCard(const Card& card) {
+	CardLocation location = card.getLocation();
 
 	switch (location) {
 		case CardLocation::PLAYER_HAND: {
+			HandCard handCard(card.getNumber(), card.getId());
+			hand.addCard(handCard);
 			break;
 		}
 		case CardLocation::PLAYER_BOARD: {
@@ -815,7 +938,7 @@ void Game::makeDraftTurn() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-Card* Game::createCard(
+Card Game::createCard(
 	int cardNumber,
 	int instanceId,
 	int cost,
@@ -829,7 +952,7 @@ Card* Game::createCard(
 	int cardDraw,
 	float evaluation
 ) {
-	Card* card = new Card(
+	Card card = Card(
 		cardNumber,
 		instanceId,
 		cost,
