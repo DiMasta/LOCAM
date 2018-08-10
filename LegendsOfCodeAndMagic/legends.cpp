@@ -18,10 +18,10 @@
 using namespace std;
 
 //#define OUTPUT_GAME_DATA
-#define REDIRECT_CIN_FROM_FILE
+//#define REDIRECT_CIN_FROM_FILE
 //#define REDIRECT_COUT_TO_FILE
-#define DEBUG_ONE_TURN
-#define DEBUG_BATTLE
+//#define DEBUG_ONE_TURN
+//#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -627,13 +627,14 @@ void HandCard::create(
 class Hand {
 public:
 	Hand();
+	Hand(const Hand& hand);
 	~Hand();
 
 	void addCard(const HandCard& card);
 
 private:
 	HandCard cards[MAX_CARDS_IN_HAND];
-	int cardsCount;
+	int cardsCount; // char
 	//char playedCards; 0100 00011
 };
 
@@ -649,6 +650,17 @@ Hand::Hand() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+Hand::Hand(const Hand& hand) {
+	cardsCount = hand.cardsCount;
+
+	for (int cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		cards[cardIdx] = hand.cards[cardIdx];
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 Hand::~Hand() {
 
 }
@@ -658,6 +670,46 @@ Hand::~Hand() {
 
 void Hand::addCard(const HandCard& card) {
 	cards[cardsCount++] = card;
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------
+
+class GameState {
+public:
+	GameState();
+	GameState(const GameState& gameState);
+	~GameState();
+
+	// Evaluate
+	// Get possible moves, based on state type, hand or battle
+
+private:
+	// player hand
+	// board
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::GameState() {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::GameState(const GameState& gameState) {
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::~GameState() {
+
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -698,12 +750,17 @@ public:
 		return inFrontier;
 	}
 
+	GameState getGameState() const {
+		return gameState;
+	}
+
 	void setId(NodeId id) { this->id = id; }
 	void setNodeDepth(int nodeDepth) { this->nodeDepth = nodeDepth; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
 	void setRootNode(bool rootNote) { this->rootNote = rootNote; }
 	void setExplored(bool explored) { this->explored = explored; }
 	void setInFrontier(bool inFrontier) { this->inFrontier = inFrontier; }
+	void setGameState(const GameState& gameState) { this->gameState = gameState; }
 
 private:
 	NodeId id;
@@ -712,6 +769,9 @@ private:
 	bool rootNote;
 	bool explored;
 	bool inFrontier;
+
+	GameState gameState;
+	// Move move; // the move which makes this GameState (may be encoded in char)
 };
 
 //*************************************************************************************************************
@@ -1104,16 +1164,25 @@ bool Graph::nodeCreated(NodeId nodeId) const {
 class GameTree {
 public:
 	GameTree();
+
+	GameTree(
+		const Hand& turnHand
+	);
+
 	~GameTree();
 
-	// Provide information(player hand and board) for which to build the tree
-	void init();
+	Hand getTurnHand() const {
+		return turnHand;
+	}
+
+	void setTurnHand(const Hand& turnHand) { this->turnHand = turnHand; }
 
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
 
 private:
-	// player hand cards
+	Hand turnHand;
+	// Board turnBoard;
 
 	Graph gameTree;
 };
@@ -1121,7 +1190,20 @@ private:
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-GameTree::GameTree() {
+GameTree::GameTree() :
+	turnHand(),
+	gameTree()
+{
+
+}
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameTree::GameTree(
+	const Hand& turnHand
+) :
+	turnHand(turnHand)
+{
 
 }
 
@@ -1129,13 +1211,6 @@ GameTree::GameTree() {
 //*************************************************************************************************************
 
 GameTree::~GameTree() {
-
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void GameTree::init() {
 
 }
 
@@ -1177,6 +1252,9 @@ public:
 	void makeBattleTurn();
 	void createAllGameCards();
 
+	// Provide information(player hand and board) for which to build the tree
+	void initGameTree();
+
 	Card createCard(
 		int cardNumber,
 		int instanceId,
@@ -1204,6 +1282,8 @@ private:
 	// Board ([6] [6] creatures; make attacks)
 	// Player (health + mana; play cards)
 	// !? Opponent (health + mana)
+
+	GameTree gameTree;
 };
 
 //*************************************************************************************************************
@@ -1213,7 +1293,8 @@ Game::Game() :
 	turnsCount(0),
 	draft(),
 	gamePhase(GamePhase::INVALID),
-	hand()
+	hand(),
+	gameTree()
 {
 
 }
@@ -1447,6 +1528,9 @@ void Game::makeDraftTurn() {
 //*************************************************************************************************************
 
 void Game::makeBattleTurn() {
+	initGameTree();
+	gameTree.build();
+	//gameTree.getBestMoves();
 }
 
 //*************************************************************************************************************
@@ -1454,6 +1538,13 @@ void Game::makeBattleTurn() {
 
 void Game::createAllGameCards() {
 	ALL_CARDS_HOLDER.initCards();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Game::initGameTree() {
+	gameTree.setTurnHand(hand);
 }
 
 //*************************************************************************************************************
