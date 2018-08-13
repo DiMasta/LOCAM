@@ -1369,7 +1369,7 @@ GameTree::GameTree(
 	const Board& turnBoard
 ) :
 	turnHand(turnHand),
-	turnBoard(tunrBoard)
+	turnBoard(turnBoard)
 {
 
 }
