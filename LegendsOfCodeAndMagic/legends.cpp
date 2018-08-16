@@ -26,24 +26,24 @@ using namespace std;
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
 
-static const int INVALID_ID = -1;
-static const int INVALID_NODE_DEPTH = -1;
-static const int TREE_ROOT_NODE_DEPTH = 1;
-static const int ZERO_CHAR = '0';
-static const int DIRECTIONS_COUNT = 8;
-static const int BYTE_SIZE = 8;
-static const int OPPONENT_ATTCK = -1;
-static const int DRAFT_TURNS = 30;
-static const int MAX_GAME_CARDS = 60;
-static const int MAX_BOARD_CREATURES = 6;
-static const int DRAFT_CARDS_COUNT = 3;
-static const int STARTING_DECK_CARDS = 30;
-static const int ALL_GAME_CARDS_COUNT = 160;
-static const int MAX_CARDS_IN_HAND = 8;
-static const int DEFAULT_CARD_TEMPLATE = 0;
-static const int ABILITIES_COUNT = 6;
+static constexpr int INVALID_ID = -1;
+static constexpr int INVALID_NODE_DEPTH = -1;
+static constexpr int TREE_ROOT_NODE_DEPTH = 1;
+static constexpr int ZERO_CHAR = '0';
+static constexpr int DIRECTIONS_COUNT = 8;
+static constexpr int BYTE_SIZE = 8;
+static constexpr int OPPONENT_ATTCK = -1;
+static constexpr int DRAFT_TURNS = 30;
+static constexpr int MAX_GAME_CARDS = 60;
+static constexpr int MAX_BOARD_CREATURES = 6;
+static constexpr int DRAFT_CARDS_COUNT = 3;
+static constexpr int STARTING_DECK_CARDS = 30;
+static constexpr int ALL_GAME_CARDS_COUNT = 160;
+static constexpr int MAX_CARDS_IN_HAND = 8;
+static constexpr int DEFAULT_CARD_TEMPLATE = 0;
+static constexpr int ABILITIES_COUNT = 6;
 
-static const float INVALID_CARD_VALUE = -1.f;
+static constexpr float INVALID_CARD_VALUE = -1.f;
 
 static const string EMPTY_STRING = "";
 static const string SUMMON = "SUMMON";
@@ -53,10 +53,10 @@ static const string PASS = "PASS";
 static const string SPACE = " ";
 static const string END_EXPRESSION = "; ";
 
-static const char GUARD = 'G';
-static const char WARD = 'W';
-static const char LETHAL = 'L';
-static const char DASH = '-';
+static constexpr char GUARD = 'G';
+static constexpr char WARD = 'W';
+static constexpr char LETHAL = 'L';
+static constexpr char DASH = '-';
 
 enum class GamePhase : int {
 	INVALID = -1,
@@ -89,6 +89,7 @@ namespace CardMasks {
 	// HandCard masks
 	static const int NUMBER_OFFSET = 0;
 	static const int HAND_CARD_ID_OFFSET = 8;
+	static constexpr int HAND_CARD_COMB_OFFSET = 8;
 
 	static const int NUMBER = 255;			// 0000 0000 0000 0000 0000 0000 1111 1111
 	static const int HAND_CARD_ID = 258048;	// 0000 0000 0000 0000 0011 1111 0000 0000
@@ -104,6 +105,8 @@ namespace CardMasks {
 	static const int BOARD_CARD_ID = 63;	// 0000 0000 0000 0000 0011 1111 0000 0000
 	static const int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
 };
+
+typedef vector<long long> HandCombinations;
 
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -668,10 +671,11 @@ public:
 	~Hand();
 
 	void addCard(const HandCard& card);
+	void getAllCombinations(HandCombinations& handCombinations, int8_t mana) const;
 
 private:
 	HandCard cards[MAX_CARDS_IN_HAND];
-	int cardsCount; // char
+	int8_t cardsCount; // char
 	//char playedCards; 0100 00011
 };
 
@@ -707,6 +711,33 @@ Hand::~Hand() {
 
 void Hand::addCard(const HandCard& card) {
 	cards[cardsCount++] = card;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) const {
+	int maxCombinations = static_cast<int>(pow(cardsCount, 2));
+
+	int8_t combinationCost = 0;
+	long long combination = 0;
+
+	// Start from ..000001 until..1111111 bit 1 represents card in set
+	for (int comb = 1; comb <= maxCombinations; ++comb) {
+		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
+			if (comb & (1 << cardIdx)) {
+				HandCard card = cards[cardIdx];
+				//int8_t number = card.getNumber();
+				//combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
+
+				//combination |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+			}
+		}
+
+		if (combinationCost <= mana) {
+			handCombinations.push_back(combination);
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -831,6 +862,66 @@ void Board::addCard(const BoardCard& card, Side side) {
 	}
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+class Player {
+public:
+	Player();
+
+	Player(
+		int8_t mana,
+		int8_t health
+	);
+
+	~Player();
+
+	int8_t getMana() const { return mana; }
+	int8_t getHealth() const { return health; }
+
+	void setMana(int8_t mana) {
+		this->mana = mana;
+	}
+
+	void setHealth(int8_t health) {
+		this->health = health;
+	}
+
+private:
+	int8_t mana;
+	int8_t health;
+};
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Player::Player() :
+	mana(0),
+	health(0)
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Player::Player(
+	int8_t mana,
+	int8_t health
+) :
+	mana(mana),
+	health(health)
+{
+
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Player::~Player() {
+
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -842,10 +933,16 @@ public:
 	GameState(const GameState& gameState);
 	~GameState();
 
+	void getAllHandCombinations(
+		HandCombinations& cardCombination
+	) const;
+
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
 
 private:
+	Player player;
+	int8_t opponentHealth;
 	Hand playerHand;
 	Board board;
 };
@@ -869,6 +966,15 @@ GameState::GameState(const GameState& gameState) {
 
 GameState::~GameState() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::getAllHandCombinations(
+	HandCombinations& cardCombination
+) const {
+	//playerHand.getAllCombinations(cardCombination, player.getMana());
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1166,6 +1272,7 @@ public:
 	void build();
 
 private:
+	// TurnState
 	Hand turnHand;
 	Board turnBoard;
 
@@ -1205,7 +1312,7 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-
+	// turnState.getAllHandCombinations(
 }
 
 //-------------------------------------------------------------------------------------------------------------
