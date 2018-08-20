@@ -609,6 +609,9 @@ public:
 
 	~HandCard();
 
+	int8_t extractNumber() const;
+	int8_t extractId() const;
+
 	void create(
 		int number,
 		int id
@@ -659,6 +662,20 @@ void HandCard::create(
 	card |= id;
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int8_t HandCard::extractNumber() const {
+	return card & CardMasks::NUMBER;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int8_t HandCard::extractId() const {
+	return (card & CardMasks::HAND_CARD_ID) >> CardMasks::HAND_CARD_ID_OFFSET;
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -670,6 +687,9 @@ public:
 	Hand(const Hand& hand);
 	~Hand();
 
+	Hand& operator=(const Hand& hand);
+
+	void copy(const Hand& hand);
 	void addCard(const HandCard& card);
 	void getAllCombinations(HandCombinations& handCombinations, int8_t mana) const;
 
@@ -692,11 +712,7 @@ Hand::Hand() :
 //*************************************************************************************************************
 
 Hand::Hand(const Hand& hand) {
-	cardsCount = hand.cardsCount;
-
-	for (int cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
-		cards[cardIdx] = hand.cards[cardIdx];
-	}
+	copy(hand);
 }
 
 //*************************************************************************************************************
@@ -704,6 +720,28 @@ Hand::Hand(const Hand& hand) {
 
 Hand::~Hand() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Hand& Hand::operator=(const Hand& hand) {
+	if (this != &hand) {
+		copy(hand);
+	}
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::copy(const Hand& hand) {
+	cardsCount = hand.cardsCount;
+
+	for (int cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		cards[cardIdx] = hand.cards[cardIdx];
+	}
 }
 
 //*************************************************************************************************************
@@ -717,7 +755,7 @@ void Hand::addCard(const HandCard& card) {
 //*************************************************************************************************************
 
 void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) const {
-	int maxCombinations = static_cast<int>(pow(cardsCount, 2));
+	int maxCombinations = static_cast<int>(pow(2, cardsCount));
 
 	int8_t combinationCost = 0;
 	long long combination = 0;
@@ -727,16 +765,19 @@ void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) c
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
 				HandCard card = cards[cardIdx];
-				//int8_t number = card.getNumber();
-				//combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
+				int8_t number = card.extractNumber();
+				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
-				//combination |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+				combination |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 			}
 		}
 
 		if (combinationCost <= mana) {
 			handCombinations.push_back(combination);
 		}
+
+		combinationCost = 0;
+		combination = 0;
 	}
 }
 
@@ -821,8 +862,12 @@ void BoardCard::create(
 class Board {
 public:
 	Board();
+	Board(const Board& board);
 	~Board();
 
+	Board& operator=(const Board& board);
+
+	void copy(const Board& board);
 	void addCard(const BoardCard& card, Side side);
 
 private:
@@ -846,8 +891,36 @@ Board::Board() :
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+Board::Board(const Board& board) {
+	copy(board);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 Board::~Board() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Board& Board::operator=(const Board& board) {
+	if (this != &board) {
+		copy(board);
+	}
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::copy(const Board& board) {
+	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
+		playerBoard[cardIdx] = board.playerBoard[cardIdx];
+		opponentBoard[cardIdx] = board.opponentBoard[cardIdx];
+	}
 }
 
 //*************************************************************************************************************
@@ -874,7 +947,11 @@ public:
 		int8_t health
 	);
 
+	Player(const Player& player);
+
 	~Player();
+
+	Player& operator=(const Player& player);
 
 	int8_t getMana() const { return mana; }
 	int8_t getHealth() const { return health; }
@@ -918,8 +995,29 @@ Player::Player(
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+Player::Player(const Player& player) :
+	mana(player.mana),
+	health(player.health)
+{
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 Player::~Player() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+Player& Player::operator=(const Player& player) {
+	if (this != &player) {
+		mana = player.mana;
+		health = player.health;
+	}
+
+	return *this;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -930,8 +1028,40 @@ Player::~Player() {
 class GameState {
 public:
 	GameState();
+
+	GameState(
+		int8_t opponentHealth,
+		const Player& player,
+		const Hand& playerHand,
+		const Board& board
+	);
+
 	GameState(const GameState& gameState);
+
 	~GameState();
+
+	GameState& operator=(const GameState& gameState);
+
+	int8_t getOpponentHealth() const { return opponentHealth; }
+	Player getPlayer() const { return player; }	
+	Hand getPlayerHand() const { return playerHand; }
+	Board getBoard() const { return board; };
+
+	void setOpponentHealth(int8_t opponentHealth) {
+		this->opponentHealth = opponentHealth;
+	}
+
+	void setPlayer(const Player& player) {
+		this->player = player;
+	}
+
+	void setPlayerHand(const Hand& playerHand) {
+		this->playerHand = playerHand;
+	}
+
+	void setBoard(const Board& board) {
+		this->board = board;
+	}
 
 	void getAllHandCombinations(
 		HandCombinations& cardCombination
@@ -941,8 +1071,8 @@ public:
 	// Get possible moves, based on state type, hand or battle
 
 private:
-	Player player;
 	int8_t opponentHealth;
+	Player player;
 	Hand playerHand;
 	Board board;
 };
@@ -950,15 +1080,40 @@ private:
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-GameState::GameState() {
+GameState::GameState() :
+	opponentHealth(0),
+	player(),
+	playerHand(),
+	board()
+{
 
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-GameState::GameState(const GameState& gameState) {
+GameState::GameState(
+	int8_t opponentHealth,
+	const Player& player,
+	const Hand& playerHand,
+	const Board& board
+) :
+	opponentHealth(opponentHealth),
+	player(player),
+	playerHand(playerHand),
+	board(board)
+{
+}
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+GameState::GameState(const GameState& gameState) :
+	opponentHealth(gameState.opponentHealth),
+	player(gameState.player),
+	playerHand(gameState.playerHand),
+	board(gameState.board)
+{
 }
 
 //*************************************************************************************************************
@@ -971,10 +1126,24 @@ GameState::~GameState() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+GameState& GameState::operator=(const GameState& gameState) {
+	if (this != &gameState) {
+		opponentHealth = gameState.opponentHealth;
+		player = gameState.player;
+		playerHand = gameState.playerHand;
+		board = gameState.board;
+	}
+
+	return *this;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 void GameState::getAllHandCombinations(
 	HandCombinations& cardCombination
 ) const {
-	//playerHand.getAllCombinations(cardCombination, player.getMana());
+	playerHand.getAllCombinations(cardCombination, player.getMana());
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1250,31 +1419,19 @@ class GameTree {
 public:
 	GameTree();
 
-	GameTree(
-		const Hand& turnHand,
-		const Board& turnBoard
-	);
-
 	~GameTree();
 
-	Hand getTurnHand() const {
-		return turnHand;
-	}
+	GameState getTurnState() const { return turnState; }
 
-	Board getTurnBoard() const {
-		return turnBoard;
+	void setTurnState(const GameState& turnState) {
+		this->turnState = turnState;
 	}
-
-	void setTurnHand(const Hand& turnHand) { this->turnHand = turnHand; }
-	void setTurnBoard(const Board& turnBoard) { this->turnBoard = turnBoard; }
 
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
 
 private:
-	// TurnState
-	Hand turnHand;
-	Board turnBoard;
+	GameState turnState;
 
 	Graph gameTree;
 };
@@ -1283,20 +1440,8 @@ private:
 //*************************************************************************************************************
 
 GameTree::GameTree() :
-	turnHand(),
+	turnState(),
 	gameTree()
-{
-
-}
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-GameTree::GameTree(
-	const Hand& turnHand,
-	const Board& turnBoard
-) :
-	turnHand(turnHand),
-	turnBoard(turnBoard)
 {
 
 }
@@ -1312,7 +1457,9 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-	// turnState.getAllHandCombinations(
+	HandCombinations cardCombinations;
+
+	turnState.getAllHandCombinations(cardCombinations);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1370,6 +1517,8 @@ private:
 	Draft draft;
 	GamePhase gamePhase;
 
+	GameState tunrState;
+
 	// Hand ([8] cards; make playable card combinations; playCard())
 	Hand hand;
 
@@ -1378,6 +1527,8 @@ private:
 
 	// Player (health + mana; play cards)
 	// !? Opponent (health + mana)
+	Player player;
+	Player opponent;
 
 	GameTree gameTree;
 };
@@ -1459,6 +1610,15 @@ void Game::getTurnInput() {
 		int playerDeck;
 		int playerRune;
 		cin >> playerHealth >> playerMana >> playerDeck >> playerRune; cin.ignore();
+
+		if (Side::PLAYER == Side(i)) {
+			player.setHealth(playerHealth);
+			player.setMana(playerMana);
+		}
+		else {
+			opponent.setHealth(playerHealth);
+			opponent.setMana(playerMana);
+		}
 
 #ifdef OUTPUT_GAME_DATA
 		cerr << playerHealth << " " << playerMana << " " << playerDeck << " " << playerRune << endl;
@@ -1645,8 +1805,9 @@ void Game::createAllGameCards() {
 //*************************************************************************************************************
 
 void Game::initGameTree() {
-	gameTree.setTurnHand(hand);
-	gameTree.setTurnBoard(board);
+	GameState turnState(opponent.getHealth(), player, hand, board);
+
+	gameTree.setTurnState(turnState);
 }
 
 //*************************************************************************************************************
