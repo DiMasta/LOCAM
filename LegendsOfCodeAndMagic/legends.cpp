@@ -106,6 +106,7 @@ namespace CardMasks {
 	static const int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
 };
 
+typedef long long HandCombination;
 typedef vector<long long> HandCombinations;
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1159,9 +1160,10 @@ public:
 	Node();
 
 	Node(
-		int nodeId,
+		NodeId nodeId,
 		int nodeDepth,
-		int parentId
+		NodeId parentId,
+		const GameState& gameState
 	);
 
 	~Node();
@@ -1202,7 +1204,8 @@ private:
 Node::Node() :
 	id(INVALID_ID),
 	depth(INVALID_NODE_DEPTH),
-	parentId(INVALID_ID)
+	parentId(INVALID_ID),
+	gameState()
 {
 
 }
@@ -1211,13 +1214,15 @@ Node::Node() :
 //*************************************************************************************************************
 
 Node::Node(
-	int id,
+	NodeId id,
 	int depth,
-	int parentId
+	NodeId parentId,
+	const GameState& gameState
 ) :
 	id(id),
 	depth(depth),
-	parentId(parentId)
+	parentId(parentId),
+	gameState(gameState)
 {
 
 }
@@ -1235,14 +1240,10 @@ Node::~Node() {
 typedef vector<NodeId> ChildrenList;
 typedef map<NodeId, ChildrenList> GraphMap;
 typedef map<NodeId, Node*> IdNodeMap;
-typedef vector<NodeId> NodeStack;
-typedef deque<NodeId> NodeQueue;
-typedef set<NodeId> NodeSet;
 
 class Graph {
 public:
 	Graph();
-	Graph(int nodesCount, GraphMap graph);
 	~Graph();
 
 	int getNodesCount() const {
@@ -1266,7 +1267,14 @@ public:
 	void setIdNodeMap(IdNodeMap idNodeMap) { this->idNodeMap = idNodeMap; }
 
 	void addEdge(NodeId parentId, NodeId childId);
-	void createNode(NodeId nodeId, int nodeDepth, NodeId parentId);
+
+	void createNode(
+		NodeId nodeId,
+		int nodeDepth,
+		NodeId parentId,
+		const GameState& gameState
+	);
+
 	void clear();
 	bool nodeCreated(NodeId nodeId) const;
 	void deleteAllNodes();
@@ -1288,17 +1296,8 @@ private:
 
 Graph::Graph() :
 	nodesCount(0),
-	graph()
-{
-
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-Graph::Graph(int nodesCount, GraphMap graph) :
-	nodesCount(nodesCount),
-	graph(graph)
+	graph(),
+	idNodeMap()
 {
 
 }
@@ -1386,9 +1385,14 @@ void Graph::addEdge(NodeId parentId, NodeId childId) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Graph::createNode(NodeId nodeId, int nodeDepth, NodeId parentId) {
+void Graph::createNode(
+	NodeId nodeId,
+	int nodeDepth,
+	NodeId parentId,
+	const GameState& gameState
+) {
 	if (!nodeCreated(nodeId)) {
-		Node* node = new Node(nodeId, nodeDepth, parentId);
+		Node* node = new Node(nodeId, nodeDepth, parentId, gameState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 		++nodesCount;
@@ -1457,9 +1461,24 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-	HandCombinations cardCombinations;
+	const NodeId rootId = 0;
+	// The parent of the whole game tree
+	gameTree.createNode(rootId, 0, INVALID_NODE_ID, turnState);
 
+	HandCombinations cardCombinations;
 	turnState.getAllHandCombinations(cardCombinations);
+
+	// for each hand combination simulate game
+	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
+		GameState state(turnState);
+
+		//state.simulate(cardCombinations[combIdx])
+		//NodeId createdNodeId = gameTree.createNode(gameTree.getNodesCount(), 1, rootId, state);
+		//gameTree.addEdge(rootId, createdNodeId)
+	}
+
+	int debug = 0;
+	++debug;
 }
 
 //-------------------------------------------------------------------------------------------------------------
