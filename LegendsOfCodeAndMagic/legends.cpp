@@ -1072,6 +1072,11 @@ public:
 	// Get possible moves, based on state type, hand or battle
 
 private:
+	// somehow represent what this state represents
+	//	player playing cards
+	//	battles
+	//		opponent
+	//		player
 	int8_t opponentHealth;
 	Player player;
 	Hand playerHand;
@@ -1515,7 +1520,7 @@ void GameTree::build() {
 //*************************************************************************************************************
 
 void GameTree::createChildren(NodeId parentId, NodesVector& children) {
-
+	// Base on the parent state, create child, may be store in player what action should be simulated
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1790,6 +1795,8 @@ void Game::switchToBattlePhase() {
 //*************************************************************************************************************
 
 void Game::addCard(const Card& card) {
+	// Set card valid targets at some point, may be not here
+
 	if (GamePhase::DRAFT == gamePhase) {
 		CardValue draftCard(card.getNumber(), card.getValue());
 		addDraftCard(draftCard);
