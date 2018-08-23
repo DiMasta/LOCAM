@@ -1155,6 +1155,9 @@ void GameState::getAllHandCombinations(
 typedef int NodeId;
 const NodeId INVALID_NODE_ID = -1;
 
+typedef queue<NodeId> NodesQueue;
+typedef vector<NodeId> NodesVector;
+
 class Node {
 public:
 	Node();
@@ -1180,8 +1183,8 @@ public:
 		return parentId;
 	}
 
-	GameState getGameState() const {
-		return gameState;
+	GameState* getGameState() {
+		return &gameState;
 	}
 
 	void setId(NodeId id) { this->id = id; }
@@ -1268,9 +1271,7 @@ public:
 
 	void addEdge(NodeId parentId, NodeId childId);
 
-	void createNode(
-		NodeId nodeId,
-		int nodeDepth,
+	NodeId createNode(
 		NodeId parentId,
 		const GameState& gameState
 	);
@@ -1385,18 +1386,25 @@ void Graph::addEdge(NodeId parentId, NodeId childId) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Graph::createNode(
-	NodeId nodeId,
-	int nodeDepth,
+NodeId Graph::createNode(
 	NodeId parentId,
 	const GameState& gameState
 ) {
+	NodeId nodeId = nodesCount;
+
 	if (!nodeCreated(nodeId)) {
+		int nodeDepth = 0;
+		if (parentId != INVALID_NODE_ID) {
+			nodeDepth = idNodeMap[parentId]->getDepth();
+		}
+
 		Node* node = new Node(nodeId, nodeDepth, parentId, gameState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 		++nodesCount;
 	}
+
+	return nodeId;
 }
 
 //*************************************************************************************************************
@@ -1434,6 +1442,8 @@ public:
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
 
+	void createChildren(NodeId parentId, NodesVector& children);
+
 private:
 	GameState turnState;
 
@@ -1461,24 +1471,51 @@ GameTree::~GameTree() {
 //*************************************************************************************************************
 
 void GameTree::build() {
-	const NodeId rootId = 0;
 	// The parent of the whole game tree
-	gameTree.createNode(rootId, 0, INVALID_NODE_ID, turnState);
+	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnState);
 
-	HandCombinations cardCombinations;
-	turnState.getAllHandCombinations(cardCombinations);
+	// A queue with states
+	NodesQueue nodesQueue;
+	nodesQueue.push(rootId);
 
-	// for each hand combination simulate game
-	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
-		GameState state(turnState);
+	// while the queue is not empty
+	// parent = pop a state 
+	// add it to the tree
+	//		create all children for parent
+	//		add each child in the queue
 
-		//state.simulate(cardCombinations[combIdx])
-		//NodeId createdNodeId = gameTree.createNode(gameTree.getNodesCount(), 1, rootId, state);
-		//gameTree.addEdge(rootId, createdNodeId)
+	while (!nodesQueue.empty()) {
+		const NodeId parentId = nodesQueue.front();
+
+		NodesVector children;
+		createChildren(parentId, children);
+		for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
+			nodesQueue.push(children[childIdx]);
+		}
 	}
 
-	int debug = 0;
-	++debug;
+	// HandCombinations cardCombinations;
+	// turnState.getAllHandCombinations(cardCombinations);
+	// 
+	// // for each hand combination simulate game
+	// for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
+	// 	NodeId createdNodeId = gameTree.createNode(rootId, turnState);
+	// 	Node* node = gameTree.getNode(createdNodeId);
+	// 	GameState* nodeState = node->getGameState();
+	// 
+	// 	//nodeState->simulate(cardCombinations[combIdx])
+	// 	//gameTree.addEdge(rootId, createdNodeId)
+	// }
+	// 
+	// int debug = 0;
+	// ++debug;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::createChildren(NodeId parentId, NodesVector& children) {
+
 }
 
 //-------------------------------------------------------------------------------------------------------------
