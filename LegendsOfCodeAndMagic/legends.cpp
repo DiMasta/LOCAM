@@ -1186,7 +1186,9 @@ void GameState::playCards(HandCombination cards) {
 
 		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardNumber];
 
-		if (CardType::CREATURE == cardToPlay->getType()) {
+		if (CardType::CREATURE == cardToPlay->getType() &&
+			board.getPlayerCardsCount() < MAX_BOARD_CREATURES
+		) {
 			playCreature(cardToPlay, cardId);
 		}
 		else {
