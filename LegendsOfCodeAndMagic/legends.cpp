@@ -92,7 +92,7 @@ namespace CardMasks {
 	static constexpr int HAND_CARD_COMB_OFFSET = 8;
 
 	static constexpr int NUMBER = 255;			// 0000 0000 0000 0000 0000 0000 1111 1111
-	static constexpr int HAND_CARD_ID = 258048;	// 0000 0000 0000 0000 0011 1111 0000 0000
+	static constexpr int HAND_CARD_ID = 16128;	// 0000 0000 0000 0000 0011 1111 0000 0000
 
 	// Boardcard masks
 	static constexpr int ATTACK_OFFSET = 0;
@@ -106,8 +106,12 @@ namespace CardMasks {
 	static constexpr int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
 };
 
-typedef long long HandCombination;
-typedef vector<long long> HandCombinations;
+struct  HandCombination {
+	long long cardsNumbers = 0;
+	long long cardsIds = 0;
+};
+
+typedef vector<HandCombination> HandCombinations;
 
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -274,6 +278,7 @@ Card::~Card() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+// TODO: this function can be bypassed, make bits in adnvaced
 int Card::getBitsAbilities() const {
 	int bits = 0;
 
@@ -610,7 +615,7 @@ public:
 
 	~HandCard();
 
-	int8_t extractNumber() const;
+	uint8_t extractNumber() const;
 	int8_t extractId() const;
 
 	void create(
@@ -666,7 +671,7 @@ void HandCard::create(
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-int8_t HandCard::extractNumber() const {
+uint8_t HandCard::extractNumber() const {
 	return card & CardMasks::NUMBER;
 }
 
@@ -758,27 +763,27 @@ void Hand::addCard(const HandCard& card) {
 void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) const {
 	int maxCombinations = static_cast<int>(pow(2, cardsCount));
 
-	int8_t combinationCost = 0;
-	long long combination = 0;
-
 	// Start from ..000001 until..1111111 bit 1 represents card in set
-	for (int comb = 1; comb <= maxCombinations; ++comb) {
+	for (int comb = 1; comb < maxCombinations; ++comb) {
+		int8_t combinationCost = 0;
+		HandCombination combination;
+
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
 				HandCard card = cards[cardIdx];
-				int8_t number = card.extractNumber();
+				uint8_t number = card.extractNumber();
+				int8_t id = card.extractId();
+
 				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
-				combination |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+				combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+				combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 			}
 		}
 
 		if (combinationCost <= mana) {
 			handCombinations.push_back(combination);
 		}
-
-		combinationCost = 0;
-		combination = 0;
 	}
 }
 
@@ -926,6 +931,9 @@ Board& Board::operator=(const Board& board) {
 //*************************************************************************************************************
 
 void Board::copy(const Board& board) {
+	playerCardsCount = board.playerCardsCount;
+	opponentCardsCount = board.opponentCardsCount;
+
 	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
 		playerBoard[cardIdx] = board.playerBoard[cardIdx];
 		opponentBoard[cardIdx] = board.opponentBoard[cardIdx];
@@ -1077,7 +1085,7 @@ public:
 	) const;
 
 	void playCards(HandCombination cards);
-	void playCreature(Card* creatureCard);
+	void playCreature(Card* creatureCard, int8_t cardId);
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
@@ -1169,16 +1177,17 @@ void GameState::getAllHandCombinations(
 void GameState::playCards(HandCombination cards) {
 	for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
 		// Shift the mask for the current card, apply mask, shift back the result for valid card id
-		uint8_t cardId = (cards & (CardMasks::NUMBER << (cardIdx * BYTE_SIZE))) >> (cardIdx * BYTE_SIZE);
+		uint8_t cardNumber = (cards.cardsNumbers & (CardMasks::NUMBER << (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET))) >> (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET);
+		int8_t cardId = (cards.cardsIds & (CardMasks::NUMBER << (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET))) >> (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET);
 
-		if (0 == cardId) {
-			break;
+		if (0 == cardNumber) {
+			continue; // May be break if the combinations is correct
 		}
 
-		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardId];
+		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardNumber];
 
 		if (CardType::CREATURE == cardToPlay->getType()) {
-			playCreature(cardToPlay);
+			playCreature(cardToPlay, cardId);
 		}
 		else {
 			//playItem(cardToPlay);
@@ -1189,10 +1198,10 @@ void GameState::playCards(HandCombination cards) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::playCreature(Card* creatureCard) {
+void GameState::playCreature(Card* creatureCard, int8_t cardId) {
 	if (board.getPlayerCardsCount() < MAX_BOARD_CREATURES) {
 		BoardCard boardCard(
-			creatureCard->getId(),
+			cardId, // game id is not stored in global array cards
 			creatureCard->getAtt(),
 			creatureCard->getDef(),
 			creatureCard->getBitsAbilities()
@@ -1208,7 +1217,7 @@ void GameState::playCreature(Card* creatureCard) {
 //-------------------------------------------------------------------------------------------------------------
 
 typedef int NodeId;
-const NodeId INVALID_NODE_ID = -1;
+static constexpr NodeId INVALID_NODE_ID = -1;
 
 typedef queue<NodeId> NodesQueue;
 typedef vector<NodeId> NodesVector;
@@ -1456,6 +1465,10 @@ NodeId Graph::createNode(
 		Node* node = new Node(nodeId, nodeDepth, parentId, gameState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
+
+		if (INVALID_NODE_ID != parentId) {
+			graph[parentId].push_back(nodeId);
+		}
 		++nodesCount;
 	}
 
@@ -1534,12 +1547,6 @@ void GameTree::build() {
 	NodesQueue nodesQueue;
 	nodesQueue.push(rootId);
 
-	// while the queue is not empty
-	// parent = pop a state 
-	// add it to the tree
-	//		create all children for parent
-	//		add each child in the queue
-
 	while (!nodesQueue.empty()) {
 		const NodeId parentId = nodesQueue.front();
 		nodesQueue.pop();
@@ -1550,30 +1557,12 @@ void GameTree::build() {
 			nodesQueue.push(children[childIdx]);
 		}
 	}
-
-	// HandCombinations cardCombinations;
-	// turnState.getAllHandCombinations(cardCombinations);
-	// 
-	// // for each hand combination simulate game
-	// for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
-	// 	NodeId createdNodeId = gameTree.createNode(rootId, turnState);
-	// 	Node* node = gameTree.getNode(createdNodeId);
-	// 	GameState* nodeState = node->getGameState();
-	// 
-	// 	//nodeState->simulate(cardCombinations[combIdx])
-	// 	//gameTree.addEdge(rootId, createdNodeId)
-	// }
-	// 
-	// int debug = 0;
-	// ++debug;
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
 void GameTree::createChildren(NodeId parentId, NodesVector& children) {
-	// Base on the parent state, create child, may be store in player what action should be simulated
-
 	Node* parent = gameTree.getNode(parentId);
 	int parentDepth = parent->getDepth();
 
@@ -1595,6 +1584,9 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 		GameState childState = *parentState;
 
 		childState.playCards(cardCombinations[combIdx]);
+
+		NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
+		children.push_back(childNodeId);
 	}
 }
 
@@ -1655,14 +1647,11 @@ private:
 
 	GameState tunrState;
 
-	// Hand ([8] cards; make playable card combinations; playCard())
 	Hand hand;
 
 	// Board ([6] [6] creatures; make attacks)
 	Board board;
 
-	// Player (health + mana; play cards)
-	// !? Opponent (health + mana)
 	Player player;
 	Player opponent;
 
