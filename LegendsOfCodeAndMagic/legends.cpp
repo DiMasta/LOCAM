@@ -618,10 +618,16 @@ public:
 	uint8_t extractNumber() const;
 	int8_t extractId() const;
 
+	HandCard& operator=(const HandCard& handCard);
+
 	void create(
 		int number,
 		int id
 	);
+
+	void erase();
+
+	bool isErased();
 
 private:
 	int card;
@@ -671,6 +677,20 @@ void HandCard::create(
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+void HandCard::erase() {
+	card = 0;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool HandCard::isErased() {
+	return !card;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 uint8_t HandCard::extractNumber() const {
 	return card & CardMasks::NUMBER;
 }
@@ -680,6 +700,17 @@ uint8_t HandCard::extractNumber() const {
 
 int8_t HandCard::extractId() const {
 	return (card & CardMasks::HAND_CARD_ID) >> CardMasks::HAND_CARD_ID_OFFSET;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+HandCard& HandCard::operator=(const HandCard& handCard) {
+	if (this != &handCard) {
+		card = handCard.card;
+	}
+
+	return *this;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -698,11 +729,11 @@ public:
 	void copy(const Hand& hand);
 	void addCard(const HandCard& card);
 	void getAllCombinations(HandCombinations& handCombinations, int8_t mana) const;
+	void removeCard(int8_t cardId);
 
 private:
 	HandCard cards[MAX_CARDS_IN_HAND];
-	int8_t cardsCount; // char
-	//char playedCards; 0100 00011
+	int8_t cardsCount;
 };
 
 //*************************************************************************************************************
@@ -770,9 +801,9 @@ void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) c
 
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
-				HandCard card = cards[cardIdx];
-				uint8_t number = card.extractNumber();
-				int8_t id = card.extractId();
+				const HandCard* card = &cards[cardIdx];
+				uint8_t number = card->extractNumber();
+				int8_t id = card->extractId();
 
 				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
@@ -783,6 +814,26 @@ void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) c
 
 		if (combinationCost <= mana) {
 			handCombinations.push_back(combination);
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Hand::removeCard(int8_t cardId) {
+	for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++ cardIdx) {
+		HandCard* card = &cards[cardIdx];
+
+		if (card->extractId() == cardId) {
+			card->erase();
+			--cardsCount;
+
+			for (int8_t nextCardIdx = cardIdx; nextCardIdx < MAX_CARDS_IN_HAND - 1; ++nextCardIdx) {
+				cards[nextCardIdx] = cards[nextCardIdx + 1];
+			}
+			
+			break;
 		}
 	}
 }
@@ -1210,6 +1261,8 @@ void GameState::playCreature(Card* creatureCard, int8_t cardId) {
 		);
 
 		board.addCard(boardCard, Side::PLAYER);
+		playerHand.removeCard(cardId);
+		// apply creature effect
 	}
 }
 
@@ -1571,6 +1624,7 @@ void GameTree::createChildren(NodeId parentId, NodesVector& children) {
 	if (0 == parentDepth) {
 		createPlayedCardsChildren(parent, children);
 	}
+	// perform attacks children
 }
 
 //*************************************************************************************************************
