@@ -1012,7 +1012,8 @@ public:
 
 	Player(
 		int8_t mana,
-		int8_t health
+		int8_t health,
+		int8_t additionalCards
 	);
 
 	Player(const Player& player);
@@ -1023,6 +1024,7 @@ public:
 
 	int8_t getMana() const { return mana; }
 	int8_t getHealth() const { return health; }
+	int8_t getAdditionalCards() const { return additionalCards; }
 
 	void setMana(int8_t mana) {
 		this->mana = mana;
@@ -1032,9 +1034,14 @@ public:
 		this->health = health;
 	}
 
+	void setAdditionalCards(int8_t additionalCards) {
+		this->additionalCards = additionalCards;
+	}
+
 private:
 	int8_t mana;
 	int8_t health;
+	int8_t additionalCards;
 };
 
 //*************************************************************************************************************
@@ -1042,7 +1049,8 @@ private:
 
 Player::Player() :
 	mana(0),
-	health(0)
+	health(0),
+	additionalCards(0)
 {
 
 }
@@ -1052,10 +1060,12 @@ Player::Player() :
 
 Player::Player(
 	int8_t mana,
-	int8_t health
+	int8_t health,
+	int8_t additionalCards
 ) :
 	mana(mana),
-	health(health)
+	health(health),
+	additionalCards(additionalCards)
 {
 
 }
@@ -1065,7 +1075,8 @@ Player::Player(
 
 Player::Player(const Player& player) :
 	mana(player.mana),
-	health(player.health)
+	health(player.health),
+	additionalCards(player.additionalCards)
 {
 }
 
@@ -1083,6 +1094,7 @@ Player& Player::operator=(const Player& player) {
 	if (this != &player) {
 		mana = player.mana;
 		health = player.health;
+		additionalCards = player.additionalCards;
 	}
 
 	return *this;
@@ -1262,7 +1274,11 @@ void GameState::playCreature(Card* creatureCard, int8_t cardId) {
 
 		board.addCard(boardCard, Side::PLAYER);
 		playerHand.removeCard(cardId);
+
 		// apply creature effect
+		player.setHealth(player.getHealth() + creatureCard->getMyHealthChange());
+		player.setAdditionalCards(player.getAdditionalCards() + creatureCard->getCardDraw());
+		opponentHealth += creatureCard->getOpponentHealthChange();
 	}
 }
 
