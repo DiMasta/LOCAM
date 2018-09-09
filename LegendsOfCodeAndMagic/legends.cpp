@@ -58,20 +58,20 @@ static constexpr char WARD = 'W';
 static constexpr char LETHAL = 'L';
 static constexpr char DASH = '-';
 
-enum class GamePhase : int {
+enum class GamePhase : int8_t {
 	INVALID = -1,
 	DRAFT,
 	BATTLE,
 };
 
-enum class CardLocation : int {
+enum class CardLocation : int8_t {
 	INVALID = -2,
 	OPPONENT_BOARD = -1,
 	PLAYER_HAND = 0,
 	PLAYER_BOARD = 1,
 };
 
-enum class CardType : int {
+enum class CardType : int8_t {
 	INVALID = -1,
 	CREATURE = 0,
 	GREEN_ITEM = 1,
@@ -79,10 +79,17 @@ enum class CardType : int {
 	BLUE_ITEM = 3,
 };
 
-enum class Side : int {
+enum class Side : int8_t {
 	INVALID = -1,
-	PLAYER = 0,
+	PLAYER,
 	OPPONENT,
+};
+
+enum class StateSimulationType : int8_t {
+	INVALID = -1,
+	PLAY_CREATURES,
+	PLAY_ITEMS,
+	PERFORM_ATTACKS,
 };
 
 namespace CardMasks {
@@ -1110,6 +1117,7 @@ public:
 	GameState();
 
 	GameState(
+		StateSimulationType simType,
 		int8_t opponentHealth,
 		const Player& player,
 		const Hand& playerHand,
@@ -1122,10 +1130,15 @@ public:
 
 	GameState& operator=(const GameState& gameState);
 
+	StateSimulationType getSimType() const { return simType; }
 	int8_t getOpponentHealth() const { return opponentHealth; }
 	Player getPlayer() const { return player; }	
 	Hand getPlayerHand() const { return playerHand; }
 	Board getBoard() const { return board; };
+
+	void setSimType(StateSimulationType simType) {
+		this->simType = simType;
+	}
 
 	void setOpponentHealth(int8_t opponentHealth) {
 		this->opponentHealth = opponentHealth;
@@ -1149,6 +1162,7 @@ public:
 
 	void playCards(HandCombination cards);
 	void playCreature(Card* creatureCard, int8_t cardId);
+	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
@@ -1159,6 +1173,8 @@ private:
 	//	battles
 	//		opponent
 	//		player
+	StateSimulationType simType;
+
 	int8_t opponentHealth;
 	Player player;
 	Hand playerHand;
@@ -1181,11 +1197,13 @@ GameState::GameState() :
 //*************************************************************************************************************
 
 GameState::GameState(
+	StateSimulationType simType,
 	int8_t opponentHealth,
 	const Player& player,
 	const Hand& playerHand,
 	const Board& board
 ) :
+	simType(simType),
 	opponentHealth(opponentHealth),
 	player(player),
 	playerHand(playerHand),
@@ -1197,6 +1215,7 @@ GameState::GameState(
 //*************************************************************************************************************
 
 GameState::GameState(const GameState& gameState) :
+	simType(gameState.simType),
 	opponentHealth(gameState.opponentHealth),
 	player(gameState.player),
 	playerHand(gameState.playerHand),
@@ -1216,6 +1235,7 @@ GameState::~GameState() {
 
 GameState& GameState::operator=(const GameState& gameState) {
 	if (this != &gameState) {
+		simType = gameState.simType;
 		opponentHealth = gameState.opponentHealth;
 		player = gameState.player;
 		playerHand = gameState.playerHand;
@@ -1244,17 +1264,17 @@ void GameState::playCards(HandCombination cards) {
 		int8_t cardId = (cards.cardsIds & (CardMasks::NUMBER << (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET))) >> (cardIdx * CardMasks::HAND_CARD_COMB_OFFSET);
 
 		if (0 == cardNumber) {
-			continue; // May be break if the combinations is correct
+			continue;
 		}
 
 		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardNumber];
 
-		if (CardType::CREATURE == cardToPlay->getType() &&
-			board.getPlayerCardsCount() < MAX_BOARD_CREATURES
+		if (StateSimulationType::PLAY_CREATURES == simType &&
+			CardType::CREATURE == cardToPlay->getType()
 		) {
 			playCreature(cardToPlay, cardId);
 		}
-		else {
+		else if (StateSimulationType::PLAY_ITEMS == simType) {
 			//playItem(cardToPlay);
 		}
 	}
@@ -1273,12 +1293,37 @@ void GameState::playCreature(Card* creatureCard, int8_t cardId) {
 		);
 
 		board.addCard(boardCard, Side::PLAYER);
+		player.setMana(player.getMana() - creatureCard->getCost());
 		playerHand.removeCard(cardId);
 
 		// apply creature effect
 		player.setHealth(player.getHealth() + creatureCard->getMyHealthChange());
 		player.setAdditionalCards(player.getAdditionalCards() + creatureCard->getCardDraw());
 		opponentHealth += creatureCard->getOpponentHealthChange();
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
+	switch (parentSimType) {
+		case StateSimulationType::INVALID: {
+			simType = StateSimulationType::PLAY_CREATURES;
+			break;
+		}
+		case StateSimulationType::PLAY_CREATURES: {
+			simType = StateSimulationType::PLAY_ITEMS;
+			break;
+		}
+		case StateSimulationType::PLAY_ITEMS: {
+			simType = StateSimulationType::PERFORM_ATTACKS;
+			break;
+		}
+		case StateSimulationType::PERFORM_ATTACKS: {
+			simType = StateSimulationType::INVALID;
+			break;
+		}
 	}
 }
 
@@ -1654,6 +1699,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
 		GameState childState = *parentState;
+		childState.setSimTypeBasedOnParent(parentState->getSimType());
 
 		childState.playCards(cardCombinations[combIdx]);
 
@@ -2004,7 +2050,13 @@ void Game::createAllGameCards() {
 //*************************************************************************************************************
 
 void Game::initGameTree() {
-	GameState turnState(opponent.getHealth(), player, hand, board);
+	GameState turnState(
+		StateSimulationType::INVALID,
+		opponent.getHealth(),
+		player,
+		hand,
+		board
+	);
 
 	gameTree.setTurnState(turnState);
 }
