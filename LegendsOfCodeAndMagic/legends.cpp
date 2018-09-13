@@ -706,10 +706,11 @@ void Game::getTurnInput() {
 		int playerMana;
 		int playerDeck;
 		int playerRune;
-		cin >> playerHealth >> playerMana >> playerDeck >> playerRune; cin.ignore();
+		int playerDraw;
+		cin >> playerHealth >> playerMana >> playerDeck >> playerRune >> playerDraw; cin.ignore();
 
 #ifdef OUTPUT_GAME_DATA
-		cerr << playerHealth << " " << playerMana << " " << playerDeck << " " << playerRune << endl;
+		cerr << playerHealth << " " << playerMana << " " << playerDeck << " " << playerRune << " " << playerDraw << endl;
 #endif
 
 		if (0 == i) {
@@ -718,7 +719,20 @@ void Game::getTurnInput() {
 	}
 
 	int opponentHand;
-	cin >> opponentHand; cin.ignore();
+	int opponentActions;
+	cin >> opponentHand >> opponentActions; cin.ignore();
+#ifdef OUTPUT_GAME_DATA
+	cerr << opponentHand << " " << opponentActions << endl;
+#endif
+	for (int i = 0; i < opponentActions; i++) {
+		string cardNumberAndAction;
+		getline(cin, cardNumberAndAction);
+
+#ifdef OUTPUT_GAME_DATA
+		cerr << cardNumberAndAction << endl;
+#endif
+	}
+
 	int cardCount;
 	cin >> cardCount; cin.ignore();
 
