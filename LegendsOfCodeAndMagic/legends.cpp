@@ -833,7 +833,7 @@ void Hand::getAllCombinations(
 			}
 		}
 
-		if (combinationCost <= mana) {
+		if (combination.cardsNumbers > 0 && combinationCost <= mana) {
 			handCombinations.push_back(combination);
 		}
 	}
@@ -1729,9 +1729,8 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
 		GameState childState = *parentState;
-		childState.setSimTypeBasedOnParent(parentState->getSimType());
-
 		childState.playCards(cardCombinations[combIdx]);
+		childState.setSimTypeBasedOnParent(parentState->getSimType());
 
 		NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
 		children.push_back(childNodeId);
@@ -1885,7 +1884,7 @@ void Game::getTurnInput() {
 		int playerDraw;
 		cin >> playerHealth >> playerMana >> playerDeck >> playerRune >> playerDraw; cin.ignore();
 
-		if (Side::PLAYER == Side(i)) {
+		if (Side::PLAYER == static_cast<Side>(i)) {
 			player.setHealth(playerHealth);
 			player.setMana(playerMana);
 		}
@@ -2095,7 +2094,7 @@ void Game::createAllGameCards() {
 
 void Game::initGameTree() {
 	GameState turnState(
-		StateSimulationType::INVALID,
+		StateSimulationType::PLAY_CREATURES,
 		opponent.getHealth(),
 		player,
 		hand,
