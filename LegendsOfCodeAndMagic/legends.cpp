@@ -744,6 +744,11 @@ public:
 		HandCombinations& handCombinations
 	) const;
 
+	bool uniqueCombination(
+		const HandCombinations& handCombinations,
+		const HandCombination& combination
+	) const;
+
 	bool playableCard(StateSimulationType simType, uint8_t number) const;
 
 private:
@@ -806,6 +811,25 @@ void Hand::addCard(const HandCard& card) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
+bool Hand::uniqueCombination(
+	const HandCombinations& handCombinations,
+	const HandCombination& combination
+) const {
+	bool unique = true;
+
+	for (const HandCombination& handCombination : handCombinations) {
+		if (handCombination.cardsNumbers == combination.cardsNumbers) {
+			unique = false;
+			break;
+		}
+	}
+
+	return unique;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
 void Hand::getAllCombinations(
 	int8_t mana,
 	StateSimulationType simType,
@@ -833,7 +857,10 @@ void Hand::getAllCombinations(
 			}
 		}
 
-		if (combination.cardsNumbers > 0 && combinationCost <= mana) {
+		if (combination.cardsNumbers > 0 &&
+			combinationCost <= mana &&
+			uniqueCombination(handCombinations, combination)
+		) {
 			handCombinations.push_back(combination);
 		}
 	}
