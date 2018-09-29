@@ -113,9 +113,10 @@ namespace CardMasks {
 	static constexpr int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
 };
 
-struct  HandCombination {
+struct HandCombination {
 	long long cardsNumbers = 0;
 	long long cardsIds = 0;
+	uint8_t playedCards = 0;
 };
 
 typedef vector<HandCombination> HandCombinations;
@@ -735,8 +736,15 @@ public:
 
 	void copy(const Hand& hand);
 	void addCard(const HandCard& card);
-	void getAllCombinations(HandCombinations& handCombinations, int8_t mana) const;
 	void removeCard(int8_t cardId);
+
+	void getAllCombinations(
+		int8_t mana,
+		StateSimulationType simType,
+		HandCombinations& handCombinations
+	) const;
+
+	bool playableCard(StateSimulationType simType, uint8_t number) const;
 
 private:
 	HandCard cards[MAX_CARDS_IN_HAND];
@@ -798,7 +806,11 @@ void Hand::addCard(const HandCard& card) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) const {
+void Hand::getAllCombinations(
+	int8_t mana,
+	StateSimulationType simType,
+	HandCombinations& handCombinations
+) const {
 	int maxCombinations = static_cast<int>(pow(2, cardsCount));
 
 	// Start from ..000001 until..1111111 bit 1 represents card in set
@@ -810,12 +822,14 @@ void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) c
 			if (comb & (1 << cardIdx)) {
 				const HandCard* card = &cards[cardIdx];
 				uint8_t number = card->extractNumber();
-				int8_t id = card->extractId();
+				if (playableCard(simType, number)) {
+					int8_t id = card->extractId();
 
-				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
+					combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
-				combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
-				combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+					combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+					combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+				}
 			}
 		}
 
@@ -823,6 +837,21 @@ void Hand::getAllCombinations(HandCombinations& handCombinations, int8_t mana) c
 			handCombinations.push_back(combination);
 		}
 	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool Hand::playableCard(StateSimulationType simType, uint8_t number) const {
+	bool playCreature = 
+		StateSimulationType::PLAY_CREATURES == simType &&
+		ALL_CARDS_HOLDER.allGameCards[number].getType() == CardType::CREATURE;
+
+	bool playItem = 
+		StateSimulationType::PLAY_ITEMS == simType &&
+		ALL_CARDS_HOLDER.allGameCards[number].getType() != CardType::CREATURE;
+
+	return playCreature || playItem;
 }
 
 //*************************************************************************************************************
@@ -1132,7 +1161,7 @@ public:
 
 	StateSimulationType getSimType() const { return simType; }
 	int8_t getOpponentHealth() const { return opponentHealth; }
-	Player getPlayer() const { return player; }	
+	Player getPlayer() const { return player; }
 	Hand getPlayerHand() const { return playerHand; }
 	Board getBoard() const { return board; };
 
@@ -1168,11 +1197,6 @@ public:
 	// Get possible moves, based on state type, hand or battle
 
 private:
-	// somehow represent what this state represents
-	//	player playing cards
-	//	battles
-	//		opponent
-	//		player
 	StateSimulationType simType;
 
 	int8_t opponentHealth;
@@ -1251,7 +1275,7 @@ GameState& GameState::operator=(const GameState& gameState) {
 void GameState::getAllHandCombinations(
 	HandCombinations& cardCombination
 ) const {
-	playerHand.getAllCombinations(cardCombination, player.getMana());
+	playerHand.getAllCombinations(player.getMana(), simType, cardCombination);
 }
 
 //*************************************************************************************************************
@@ -1276,6 +1300,8 @@ void GameState::playCards(HandCombination cards) {
 		}
 		else if (StateSimulationType::PLAY_ITEMS == simType) {
 			//playItem(cardToPlay);
+			int debug = 0;
+			++debug;
 		}
 	}
 }
@@ -1321,6 +1347,10 @@ void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
 			break;
 		}
 		case StateSimulationType::PERFORM_ATTACKS: {
+			simType = StateSimulationType::INVALID;
+			break;
+		}
+		default: {
 			simType = StateSimulationType::INVALID;
 			break;
 		}
@@ -1682,9 +1712,9 @@ void GameTree::createChildren(NodeId parentId, NodesVector& children) {
 	Node* parent = gameTree.getNode(parentId);
 	int parentDepth = parent->getDepth();
 
-	if (0 == parentDepth) {
+	//if (0 == parentDepth) {
 		createPlayedCardsChildren(parent, children);
-	}
+	//}
 	// perform attacks children
 }
 
