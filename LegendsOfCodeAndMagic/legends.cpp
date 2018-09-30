@@ -116,7 +116,7 @@ namespace CardMasks {
 	
 	static constexpr int ATTACK = 15;			// 0000 0000 0000 0000 0000 0000 0000 1111
 	static constexpr int DEFENSE = 240;			// 0000 0000 0000 0000 0000 0000 1111 0000
-	static constexpr int BOARD_CARD_ID = 63;	// 0000 0000 0000 0000 0011 1111 0000 0000
+	static constexpr int BOARD_CARD_ID = 16128;	// 0000 0000 0000 0000 0011 1111 0000 0000
 	static constexpr int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
 };
 
@@ -667,11 +667,14 @@ public:
 	);
 
 	void erase();
+	void addTarget(uint8_t cardId);
 
 	bool isErased();
 
 private:
 	int card;
+	// represent targets somehow
+	vector<uint8_t> targets;
 };
 
 //*************************************************************************************************************
@@ -720,6 +723,14 @@ void HandCard::create(
 
 void HandCard::erase() {
 	card = 0;
+	targets.clear();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void HandCard::addTarget(uint8_t cardId) {
+	targets.push_back(cardId);
 }
 
 //*************************************************************************************************************
@@ -749,6 +760,7 @@ int8_t HandCard::extractId() const {
 HandCard& HandCard::operator=(const HandCard& handCard) {
 	if (this != &handCard) {
 		card = handCard.card;
+		targets = handCard.targets;
 	}
 
 	return *this;
@@ -764,6 +776,12 @@ public:
 	Hand();
 	Hand(const Hand& hand);
 	~Hand();
+
+	int8_t getCardsCount() const {
+		return cardsCount;
+	}
+
+	HandCard& getCard(int8_t cardIdx);
 
 	Hand& operator=(const Hand& hand);
 
@@ -810,6 +828,13 @@ Hand::Hand(const Hand& hand) {
 
 Hand::~Hand() {
 
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+HandCard& Hand::getCard(int8_t cardIdx) {
+	return cards[cardIdx];
 }
 
 //*************************************************************************************************************
@@ -959,8 +984,11 @@ public:
 		int abilitiesBits
 	);
 
+	uint8_t extractId() const;
+
 private:
 	int card;
+	// somehow represent targets
 };
 
 BoardCard::BoardCard() {
@@ -1001,10 +1029,17 @@ void BoardCard::create(
 	card |= defense;
 
 	id <<= CardMasks::BOARD_CARD_ID_OFFSET;
-	card |= attack;
+	card |= id;
 
 	abilitiesBits <<= CardMasks::ABILITIES_OFFSET;
 	card |= abilitiesBits;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+uint8_t BoardCard::extractId() const {
+	return (card & CardMasks::BOARD_CARD_ID) >> CardMasks::BOARD_CARD_ID_OFFSET;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1024,6 +1059,14 @@ public:
 
 	int getOpponentCardsCount() const {
 		return opponentCardsCount;
+	}
+
+	BoardCard (&getPlayerBoard())[MAX_BOARD_CREATURES] {
+		return playerBoard;
+	}
+
+	BoardCard (&getOpponentBoard())[MAX_BOARD_CREATURES] {
+		return opponentBoard;
 	}
 
 	Board& operator=(const Board& board);
@@ -1253,6 +1296,8 @@ public:
 	void playCreature(Card* creatureCard, uint8_t cardId);
 	void playItem(Card* cardToPlay, uint8_t cardId, uint8_t target);
 	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
+	void setItemTargets();
+	void setRedGreenItemTargets(HandCard& item, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
@@ -1420,6 +1465,53 @@ void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
 			simType = StateSimulationType::INVALID;
 			break;
 		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::setItemTargets() {
+	int8_t handCardsCount = playerHand.getCardsCount();
+	for (int8_t cardIdx = 0; cardIdx < handCardsCount; ++cardIdx) {
+		HandCard& handCard = playerHand.getCard(cardIdx);
+
+		const uint8_t number = handCard.extractNumber();
+		const Card& card = ALL_CARDS_HOLDER.allGameCards[number];
+
+		const CardType type = card.getType();
+
+		switch (type) {
+			case CardType::RED_ITEM: {
+				setRedGreenItemTargets(handCard, board.getOpponentBoard());
+				break;
+			}
+			case CardType::GREEN_ITEM: {
+				setRedGreenItemTargets(handCard, board.getPlayerBoard());
+				break;
+			}
+			case CardType::BLUE_ITEM: {
+				break;
+			}
+			default: {
+				break;
+			}
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::setRedGreenItemTargets(HandCard& item, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
+	for (const BoardCard& boardCard : board) {
+		const uint8_t id = boardCard.extractId();
+
+		if (0 == id) {
+			break;
+		}
+
+		item.addTarget(id);
 	}
 }
 
@@ -1778,9 +1870,8 @@ void GameTree::createChildren(NodeId parentId, NodesVector& children) {
 	Node* parent = gameTree.getNode(parentId);
 	int parentDepth = parent->getDepth();
 
-	//if (0 == parentDepth) {
-		createPlayedCardsChildren(parent, children);
-	//}
+	createPlayedCardsChildren(parent, children);
+
 	// perform attacks children
 }
 
@@ -1796,6 +1887,12 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
 		GameState childState = *parentState;
 		childState.playCards(cardCombinations[combIdx]);
+
+		// After all creatures are played set all targets for items
+		if (StateSimulationType::PLAY_CREATURES == childState.getSimType()) {
+			childState.setItemTargets();
+		}
+
 		childState.setSimTypeBasedOnParent(parentState->getSimType());
 
 		NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
