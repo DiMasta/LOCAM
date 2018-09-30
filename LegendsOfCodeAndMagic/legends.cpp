@@ -96,7 +96,6 @@ enum class HandCombProperty : int8_t {
 	INVALID = -1,
 	NUMBER,
 	ID,
-	ITEM_TARGET,
 };
 
 namespace CardMasks {
@@ -123,9 +122,10 @@ namespace CardMasks {
 struct HandCombination {
 	long long cardsNumbers = 0;
 	long long cardsIds = 0;
-	long long itemTargets = 0;
+	uint8_t playedCards = 0;
+	map<uint8_t, vector<uint8_t>> itemsTargets;
 
-	uint8_t extractProperty(int8_t cardIdx, HandCombProperty propertyType) {
+	uint8_t extractProperty(uint8_t cardIdx, HandCombProperty propertyType) const {
 		long long propertyValue = 0;
 
 		switch (propertyType) {
@@ -137,10 +137,6 @@ struct HandCombination {
 				propertyValue = cardsIds;
 				break;
 			}
-			case HandCombProperty::ITEM_TARGET: {
-				propertyValue = itemTargets;
-				break;
-			}
 			default: {
 				break;
 			}
@@ -149,6 +145,10 @@ struct HandCombination {
 		// Shift the mask for the current card, apply mask, shift back the result for valid card property
 		const int cardOffset = cardIdx * CardMasks::HAND_CARD_COMB_OFFSET;
 		return (propertyValue & (CardMasks::NUMBER << cardOffset)) >> cardOffset;
+	}
+
+	bool cardPlayed(uint8_t cardIdx) const {
+		return playedCards & (1 << cardIdx);
 	}
 };
 
@@ -667,14 +667,11 @@ public:
 	);
 
 	void erase();
-	void addTarget(uint8_t cardId);
 
 	bool isErased();
 
 private:
 	int card;
-	// represent targets somehow
-	vector<uint8_t> targets;
 };
 
 //*************************************************************************************************************
@@ -723,14 +720,6 @@ void HandCard::create(
 
 void HandCard::erase() {
 	card = 0;
-	targets.clear();
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void HandCard::addTarget(uint8_t cardId) {
-	targets.push_back(cardId);
 }
 
 //*************************************************************************************************************
@@ -760,7 +749,6 @@ int8_t HandCard::extractId() const {
 HandCard& HandCard::operator=(const HandCard& handCard) {
 	if (this != &handCard) {
 		card = handCard.card;
-		targets = handCard.targets;
 	}
 
 	return *this;
@@ -1267,6 +1255,7 @@ public:
 	Player getPlayer() const { return player; }
 	Hand getPlayerHand() const { return playerHand; }
 	Board getBoard() const { return board; };
+	HandCombination getHandCombinaiton() const { return handCombination; }
 
 	void setSimType(StateSimulationType simType) {
 		this->simType = simType;
@@ -1288,27 +1277,31 @@ public:
 		this->board = board;
 	}
 
+	void setHandCombination(const HandCombination& handCombination) {
+		this->handCombination = handCombination;
+	}
+
 	void getAllHandCombinations(
 		HandCombinations& cardCombination
 	) const;
 
-	void playCards(HandCombination cards);
+	void playCards();
 	void playCreature(Card* creatureCard, uint8_t cardId);
-	void playItem(Card* cardToPlay, uint8_t cardId, uint8_t target);
+	void playItem(const Card& cardToPlay, uint8_t cardId, uint8_t target);
 	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
 	void setItemTargets();
-	void setRedGreenItemTargets(HandCard& item, const BoardCard (&board)[MAX_BOARD_CREATURES]);
+	void setRedGreenItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
 
 private:
 	StateSimulationType simType;
-
 	int8_t opponentHealth;
 	Player player;
 	Hand playerHand;
 	Board board;
+	HandCombination handCombination;
 };
 
 //*************************************************************************************************************
@@ -1387,11 +1380,10 @@ void GameState::getAllHandCombinations(
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::playCards(HandCombination cards) {
+void GameState::playCards() {
 	for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
-		uint8_t cardNumber = cards.extractProperty(cardIdx, HandCombProperty::NUMBER);
-		uint8_t cardId = cards.extractProperty(cardIdx, HandCombProperty::ID);
-		uint8_t target = cards.extractProperty(cardIdx, HandCombProperty::ITEM_TARGET);
+		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
 
 		if (0 == cardNumber) {
 			continue;
@@ -1405,7 +1397,7 @@ void GameState::playCards(HandCombination cards) {
 			playCreature(cardToPlay, cardId);
 		}
 		else if (StateSimulationType::PLAY_ITEMS == simType) {
-			playItem(cardToPlay, cardId, target);
+			//playItem(cardToPlay, cardId, target);
 		}
 	}
 }
@@ -1436,7 +1428,7 @@ void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::playItem(Card* cardToPlay, uint8_t cardId, uint8_t target) {
+void GameState::playItem(const Card& cardToPlay, uint8_t cardId, uint8_t target) {
 
 }
 
@@ -1472,22 +1464,22 @@ void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
 //*************************************************************************************************************
 
 void GameState::setItemTargets() {
-	int8_t handCardsCount = playerHand.getCardsCount();
-	for (int8_t cardIdx = 0; cardIdx < handCardsCount; ++cardIdx) {
-		HandCard& handCard = playerHand.getCard(cardIdx);
+	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
 
-		const uint8_t number = handCard.extractNumber();
+		const uint8_t number = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		const uint8_t id = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+
 		const Card& card = ALL_CARDS_HOLDER.allGameCards[number];
 
 		const CardType type = card.getType();
 
 		switch (type) {
 			case CardType::RED_ITEM: {
-				setRedGreenItemTargets(handCard, board.getOpponentBoard());
+				setRedGreenItemTargets(id, board.getOpponentBoard());
 				break;
 			}
 			case CardType::GREEN_ITEM: {
-				setRedGreenItemTargets(handCard, board.getPlayerBoard());
+				setRedGreenItemTargets(id, board.getPlayerBoard());
 				break;
 			}
 			case CardType::BLUE_ITEM: {
@@ -1503,7 +1495,7 @@ void GameState::setItemTargets() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::setRedGreenItemTargets(HandCard& item, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
+void GameState::setRedGreenItemTargets(uint8_t cardId, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
 	for (const BoardCard& boardCard : board) {
 		const uint8_t id = boardCard.extractId();
 
@@ -1511,7 +1503,7 @@ void GameState::setRedGreenItemTargets(HandCard& item, const BoardCard(&board)[M
 			break;
 		}
 
-		item.addTarget(id);
+		handCombination.itemsTargets[cardId].push_back(id);
 	}
 }
 
@@ -1880,23 +1872,50 @@ void GameTree::createChildren(NodeId parentId, NodesVector& children) {
 
 void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 	GameState* parentState = parent->getGameState();
+	
+	// First play all creatures
+	if (StateSimulationType::PLAY_CREATURES == parentState->getSimType()) {
+		HandCombinations cardCombinations;
+		parentState->getAllHandCombinations(cardCombinations);
 
-	HandCombinations cardCombinations;
-	parentState->getAllHandCombinations(cardCombinations);
-
-	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
-		GameState childState = *parentState;
-		childState.playCards(cardCombinations[combIdx]);
-
-		// After all creatures are played set all targets for items
-		if (StateSimulationType::PLAY_CREATURES == childState.getSimType()) {
+		for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
+			GameState childState = *parentState;
+			childState.setHandCombination(cardCombinations[combIdx]);
+			childState.playCards();
 			childState.setItemTargets();
+
+			childState.setSimType(StateSimulationType::PLAY_ITEMS);
+
+			NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
+			children.push_back(childNodeId);
 		}
+	}
+	else if (StateSimulationType::PLAY_ITEMS == parentState->getSimType()) {
+		const HandCombination& handCombination = parentState->getHandCombinaiton();
 
-		childState.setSimTypeBasedOnParent(parentState->getSimType());
+		for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+			if (handCombination.cardPlayed(cardIdx)) {
+				continue;
+			}
 
-		NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
-		children.push_back(childNodeId);
+			uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+			uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+
+			if (cardNumber > 0) {
+				const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+				if (card.getType() >= CardType::GREEN_ITEM) {
+					const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
+					for (uint8_t target : itemTargets) {
+						GameState childState = *parentState;
+						childState.playItem(card, cardId, target);// each target item males new state
+						// set item as played
+						// check if other items have to be played if not set next state for attacks
+					}
+
+					break;
+				}
+			}
+		}
 	}
 }
 
