@@ -50,6 +50,7 @@ static const string SUMMON = "SUMMON";
 static const string ATTACK = "ATTACK";
 static const string PICK = "PICK";
 static const string PASS = "PASS";
+static const string USE = "USE";
 static const string SPACE = " ";
 static const string END_EXPRESSION = "; ";
 
@@ -1352,7 +1353,8 @@ public:
 		const Player& player,
 		const Hand& playerHand,
 		const Board& board,
-		const HandCombination& handCombination
+		const HandCombination& handCombination,
+		const string& move
 	);
 
 	GameState(const GameState& gameState);
@@ -1367,6 +1369,7 @@ public:
 	Hand getPlayerHand() const { return playerHand; }
 	Board getBoard() const { return board; };
 	HandCombination getHandCombinaiton() const { return handCombination; }
+	string getMove() const { return move; }
 
 	void setSimType(StateSimulationType simType) {
 		this->simType = simType;
@@ -1392,10 +1395,11 @@ public:
 		this->handCombination = handCombination;
 	}
 
-	void getAllHandCombinations(
-		HandCombinations& cardCombination
-	) const;
+	void setMove(const string& move) {
+		this->move = move;
+	}
 
+	void getAllHandCombinations(HandCombinations& cardCombination) const;
 	void playCards();
 	void playCreature(Card* creatureCard, uint8_t cardId);
 	void playItem(const Card& item, uint8_t target);
@@ -1415,6 +1419,7 @@ private:
 	Hand playerHand;
 	Board board;
 	HandCombination handCombination;
+	string move; // TODO: may be it would be better to use const char* or some different mapping
 };
 
 //*************************************************************************************************************
@@ -1424,7 +1429,8 @@ GameState::GameState() :
 	opponentHealth(0),
 	player(),
 	playerHand(),
-	board()
+	board(),
+	move(EMPTY_STRING)
 {
 
 }
@@ -1438,14 +1444,16 @@ GameState::GameState(
 	const Player& player,
 	const Hand& playerHand,
 	const Board& board,
-	const HandCombination& handCombination
+	const HandCombination& handCombination,
+	const string& move
 ) :
 	simType(simType),
 	opponentHealth(opponentHealth),
 	player(player),
 	playerHand(playerHand),
 	board(board),
-	handCombination(handCombination)
+	handCombination(handCombination),
+	move(move)
 {
 }
 
@@ -1537,6 +1545,8 @@ void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
 		player.setHealth(player.getHealth() + creatureCard->getMyHealthChange());
 		player.setAdditionalCards(player.getAdditionalCards() + creatureCard->getCardDraw());
 		opponentHealth += creatureCard->getOpponentHealthChange();
+
+		move += SUMMON + SPACE + to_string(cardId);
 	}
 }
 
@@ -2069,6 +2079,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 						childState.setHandCombination(handCombination);
 						childState.setPlayedCardInHandCombination(cardIdx);
 						childState.checkForItemsToPlay();
+						childState.setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target));
 
 						NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
 						children.push_back(childNodeId);
@@ -2443,7 +2454,8 @@ void Game::initGameTree() {
 		player,
 		hand,
 		board,
-		HandCombination()
+		HandCombination(),
+		EMPTY_STRING
 	);
 
 	gameTree.setTurnState(turnState);
