@@ -150,6 +150,10 @@ struct HandCombination {
 	bool cardPlayed(uint8_t cardIdx) const {
 		return playedCards & (1 << cardIdx);
 	}
+
+	void markPlayedCard(uint8_t cardIdx) {
+		playedCards |= 1 << cardIdx;
+	}
 };
 
 typedef vector<HandCombination> HandCombinations;
@@ -892,20 +896,20 @@ void Hand::getAllCombinations(
 			if (comb & (1 << cardIdx)) {
 				const HandCard* card = &cards[cardIdx];
 				uint8_t number = card->extractNumber();
-				if (playableCard(simType, number)) {
+				//if (playableCard(simType, number)) {
 					int8_t id = card->extractId();
 
 					combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
 					combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 					combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
-				}
+				//}
 			}
 		}
 
 		if (combination.cardsNumbers > 0 &&
-			combinationCost <= mana &&
-			uniqueCombination(handCombinations, combination)
+			combinationCost <= mana
+			//&& uniqueCombination(handCombinations, combination)
 		) {
 			handCombinations.push_back(combination);
 		}
@@ -973,6 +977,15 @@ public:
 	);
 
 	uint8_t extractId() const;
+	uint8_t extractAttack() const;
+	uint8_t extractDefense() const;
+	uint8_t extractAbilitiesBits() const;
+
+	/// Returns true if the creature is destroyed
+	bool applyItemEffect(const Card& item);
+
+	/// Removes creature from the board
+	// void destroy();
 
 private:
 	int card;
@@ -1030,6 +1043,53 @@ uint8_t BoardCard::extractId() const {
 	return (card & CardMasks::BOARD_CARD_ID) >> CardMasks::BOARD_CARD_ID_OFFSET;
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+uint8_t BoardCard::extractAttack() const {
+	return card & CardMasks::ATTACK;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+uint8_t BoardCard::extractDefense() const {
+	return (card & CardMasks::DEFENSE) >> CardMasks::DEFENSE_OFFSET;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+uint8_t BoardCard::extractAbilitiesBits() const {
+	return (card & CardMasks::ABILITIES) >> CardMasks::ABILITIES_OFFSET;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool BoardCard::applyItemEffect(const Card& item) {
+	bool creatureDead = true;
+
+	int newDefence = extractDefense() + item.getDef();
+	if (newDefence > 0) {
+		uint8_t abilities = extractAbilitiesBits();
+		uint8_t newAbilities = abilities | item.getBitsAbilities();
+
+		if (CardType::RED_ITEM == item.getType()) {
+			newAbilities = abilities & item.getBitsAbilities();
+		}
+
+		create(
+			extractId(),
+			extractAttack() + item.getAtt(),
+			extractDefense() + item.getDef(),
+			newAbilities
+		);
+	}
+
+	return creatureDead;
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -1061,6 +1121,8 @@ public:
 
 	void copy(const Board& board);
 	void addCard(const BoardCard& card, Side side);
+	void playItem(const Card& item, uint8_t target);
+	void removeCard(int cardIdx, Side side);
 
 private:
 	BoardCard playerBoard[MAX_BOARD_CREATURES];
@@ -1127,6 +1189,52 @@ void Board::addCard(const BoardCard& card, Side side) {
 	}
 	else {
 		opponentBoard[opponentCardsCount++] = card;
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::playItem(const Card& item, uint8_t target) {
+	bool playerCardTarget = false;
+
+	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
+		BoardCard& playerCard = playerBoard[cardIdx];
+		if (playerCard.extractId() == target) {
+			if (playerCard.applyItemEffect(item)) {
+				removeCard(cardIdx, Side::PLAYER);
+			}
+			playerCardTarget = true;
+			break;
+		}
+	}
+
+	if (!playerCardTarget) {
+		for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
+			BoardCard& opponentCard = opponentBoard[cardIdx];
+			if (opponentCard.extractId() == target) {
+				if (opponentCard.applyItemEffect(item)) {
+					removeCard(cardIdx, Side::PLAYER);
+				}
+				break;
+			}
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::removeCard(int cardIdx, Side side) {
+	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES - 1; ++cardIdx) {
+		if (Side::PLAYER == side) {
+			playerBoard[cardIdx] = playerBoard[cardIdx + 1];
+			--playerCardsCount;
+		}
+		else {
+			opponentBoard[cardIdx] = opponentBoard[cardIdx + 1];
+			--opponentCardsCount;
+		}
 	}
 }
 
@@ -1241,7 +1349,8 @@ public:
 		int8_t opponentHealth,
 		const Player& player,
 		const Hand& playerHand,
-		const Board& board
+		const Board& board,
+		const HandCombination& handCombination
 	);
 
 	GameState(const GameState& gameState);
@@ -1287,10 +1396,11 @@ public:
 
 	void playCards();
 	void playCreature(Card* creatureCard, uint8_t cardId);
-	void playItem(const Card& cardToPlay, uint8_t cardId, uint8_t target);
+	void playItem(const Card& item, uint8_t target);
 	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
 	void setItemTargets();
-	void setRedGreenItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
+	void setItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
+	void setPlayedCardInHamdCombination(uint8_t cardIdx);
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
@@ -1324,13 +1434,15 @@ GameState::GameState(
 	int8_t opponentHealth,
 	const Player& player,
 	const Hand& playerHand,
-	const Board& board
+	const Board& board,
+	const HandCombination& handCombination
 ) :
 	simType(simType),
 	opponentHealth(opponentHealth),
 	player(player),
 	playerHand(playerHand),
-	board(board)
+	board(board),
+	handCombination(handCombination)
 {
 }
 
@@ -1342,7 +1454,8 @@ GameState::GameState(const GameState& gameState) :
 	opponentHealth(gameState.opponentHealth),
 	player(gameState.player),
 	playerHand(gameState.playerHand),
-	board(gameState.board)
+	board(gameState.board),
+	handCombination(gameState.handCombination)
 {
 }
 
@@ -1363,6 +1476,7 @@ GameState& GameState::operator=(const GameState& gameState) {
 		player = gameState.player;
 		playerHand = gameState.playerHand;
 		board = gameState.board;
+		handCombination = gameState.handCombination;
 	}
 
 	return *this;
@@ -1395,9 +1509,7 @@ void GameState::playCards() {
 			CardType::CREATURE == cardToPlay->getType()
 		) {
 			playCreature(cardToPlay, cardId);
-		}
-		else if (StateSimulationType::PLAY_ITEMS == simType) {
-			//playItem(cardToPlay, cardId, target);
+			handCombination.markPlayedCard(cardIdx);
 		}
 	}
 }
@@ -1428,8 +1540,12 @@ void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::playItem(const Card& cardToPlay, uint8_t cardId, uint8_t target) {
+void GameState::playItem(const Card& item, uint8_t target) {
+	board.playItem(item, target);
 
+	player.setHealth(player.getHealth() + item.getMyHealthChange());
+	player.setAdditionalCards(player.getAdditionalCards() + item.getCardDraw());
+	opponentHealth += item.getOpponentHealthChange();
 }
 
 //*************************************************************************************************************
@@ -1465,8 +1581,11 @@ void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
 
 void GameState::setItemTargets() {
 	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
-
 		const uint8_t number = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		if (0 == number) {
+			continue;
+		}
+
 		const uint8_t id = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
 
 		const Card& card = ALL_CARDS_HOLDER.allGameCards[number];
@@ -1475,14 +1594,18 @@ void GameState::setItemTargets() {
 
 		switch (type) {
 			case CardType::RED_ITEM: {
-				setRedGreenItemTargets(id, board.getOpponentBoard());
+				setItemTargets(id, board.getOpponentBoard());
 				break;
 			}
 			case CardType::GREEN_ITEM: {
-				setRedGreenItemTargets(id, board.getPlayerBoard());
+				setItemTargets(id, board.getPlayerBoard());
 				break;
 			}
 			case CardType::BLUE_ITEM: {
+				// TODO: player targets and no creture!!!
+				// if player target item
+				setItemTargets(id, board.getOpponentBoard());
+				setItemTargets(id, board.getPlayerBoard());
 				break;
 			}
 			default: {
@@ -1495,7 +1618,7 @@ void GameState::setItemTargets() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::setRedGreenItemTargets(uint8_t cardId, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
+void GameState::setItemTargets(uint8_t cardId, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
 	for (const BoardCard& boardCard : board) {
 		const uint8_t id = boardCard.extractId();
 
@@ -1505,6 +1628,13 @@ void GameState::setRedGreenItemTargets(uint8_t cardId, const BoardCard(&board)[M
 
 		handCombination.itemsTargets[cardId].push_back(id);
 	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::setPlayedCardInHamdCombination(uint8_t cardIdx) {
+	handCombination.markPlayedCard(cardIdx);
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1903,12 +2033,14 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 			if (cardNumber > 0) {
 				const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
-				if (card.getType() >= CardType::GREEN_ITEM) {
+				if (card.getType() != CardType::CREATURE) {
 					const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
+					// each target, for item, makes new state
 					for (uint8_t target : itemTargets) {
 						GameState childState = *parentState;
-						childState.playItem(card, cardId, target);// each target item males new state
-						// set item as played
+						childState.playItem(card, target);
+						childState.setHandCombination(handCombination);
+						childState.setPlayedCardInHamdCombination(cardIdx);
 						// check if other items have to be played if not set next state for attacks
 					}
 
@@ -2120,7 +2252,7 @@ void Game::getTurnInput() {
 #ifdef OUTPUT_GAME_DATA
 		cerr << cardNumber << " " << instanceId << " " << location << " " << cardType << " " << cost << " " << attack << " " << defense << " " << abilities << " " << myHealthChange << " " << opponentHealthChange << " " << cardDraw << endl;
 #endif
-		Card card = createCard(
+		const Card& card = createCard(
 			cardNumber,
 			instanceId,
 			cost,
@@ -2280,7 +2412,8 @@ void Game::initGameTree() {
 		opponent.getHealth(),
 		player,
 		hand,
-		board
+		board,
+		HandCombination()
 	);
 
 	gameTree.setTurnState(turnState);
@@ -2303,7 +2436,7 @@ Card Game::createCard(
 	int cardDraw,
 	float evaluation
 ) {
-	Card card = Card(
+	Card card(
 		cardNumber,
 		instanceId,
 		cost,
