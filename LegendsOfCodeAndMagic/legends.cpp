@@ -1466,7 +1466,8 @@ GameState::GameState(const GameState& gameState) :
 	player(gameState.player),
 	playerHand(gameState.playerHand),
 	board(gameState.board),
-	handCombination(gameState.handCombination)
+	handCombination(gameState.handCombination),
+	move(gameState.move)
 {
 }
 
@@ -1546,7 +1547,7 @@ void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
 		player.setAdditionalCards(player.getAdditionalCards() + creatureCard->getCardDraw());
 		opponentHealth += creatureCard->getOpponentHealthChange();
 
-		move += SUMMON + SPACE + to_string(cardId);
+		move += SUMMON + SPACE + to_string(cardId) + END_EXPRESSION + SPACE;
 	}
 }
 
@@ -1556,6 +1557,7 @@ void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
 void GameState::playItem(const Card& item, uint8_t target) {
 	board.playItem(item, target);
 
+	player.setMana(player.getMana() - item.getCost());
 	player.setHealth(player.getHealth() + item.getMyHealthChange());
 	player.setAdditionalCards(player.getAdditionalCards() + item.getCardDraw());
 	opponentHealth += item.getOpponentHealthChange();
@@ -2047,6 +2049,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 		for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
 			GameState childState = *parentState;
+			childState.setMove(EMPTY_STRING);
 			childState.setHandCombination(cardCombinations[combIdx]);
 			childState.playCards();
 			childState.setItemTargets();
@@ -2075,6 +2078,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 					// each target, for item, makes new state
 					for (uint8_t target : itemTargets) {
 						GameState childState = *parentState;
+						childState.setMove(EMPTY_STRING);
 						childState.playItem(card, target);
 						childState.setHandCombination(handCombination);
 						childState.setPlayedCardInHandCombination(cardIdx);
