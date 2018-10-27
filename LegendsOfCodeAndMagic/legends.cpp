@@ -1172,8 +1172,12 @@ inline void BoardCard::setAttack(int attack) {
 //*************************************************************************************************************
 
 inline void BoardCard::setDefense(int defense) {
+	if (defense < 0) {
+		defense = 0;
+	}
+
 	defense <<= CardMasks::DEFENSE_OFFSET;
-	card |= defense;
+	card &= (~CardMasks::DEFENSE) | defense;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -1249,12 +1253,16 @@ public:
 
 	void applyLethal(
 		BoardCard& attackCreature,
-		BoardCard& defenseCreature
+		BoardCard& defenseCreature,
+		bool& attackerDestroyed,
+		bool& defenderDestroyed
 	);
 
 	void applyDemage(
 		BoardCard& attackCreature,
-		BoardCard& defenseCreature
+		BoardCard& defenseCreature,
+		bool& attackerDestroyed,
+		bool& defenderDestroyed
 	);
 
 	void applyWard(
@@ -1372,43 +1380,40 @@ void Board::performAttack(
 	int8_t& attackingPlayerHealthChange,
 	int8_t& defendingPlayerHealthChange
 ) {
-	// May be here a pointer would be better
-	BoardCard& attackCreature = playerBoard[0];
+	BoardCard* attackCreature = nullptr;
 
 	if (PLAYER_TARGET != defCreatureId) {
-		BoardCard& defenseCreature = playerBoard[0];
+		BoardCard* defenseCreature = nullptr;
 
 		for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
 			BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
 			if (attCreatureId == playerBoardCard.extractId()) {
-				attackCreature = playerBoardCard;
+				attackCreature = &playerBoardCard;
 				break;
 			}
 			else if (defCreatureId == playerBoardCard.extractId()) {
-				defenseCreature = playerBoardCard;
+				defenseCreature = &playerBoardCard;
 				break;
 			}
 		}
 
 		for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
-			BoardCard& opponentBoardCard = playerBoard[opponentCreatureIdx];
+			BoardCard& opponentBoardCard = opponentBoard[opponentCreatureIdx];
 			if (attCreatureId == opponentBoardCard.extractId()) {
-				attackCreature = opponentBoardCard;
+				attackCreature = &opponentBoardCard;
 				break;
 			}
 			else if (defCreatureId == opponentBoardCard.extractId()) {
-				defenseCreature = opponentBoardCard;
+				defenseCreature = &opponentBoardCard;
 				break;
 			}
 		}
 
-		fight(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
+		fight(*attackCreature, *defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
 	}
 	else {
-		defendingPlayerHealthChange -= attackCreature.extractAttack();
+		defendingPlayerHealthChange -= attackCreature->extractAttack();
 	}
-
-	attackCreature.unsetAbility(CardMasks::CAN_ATTACK);
 }
 
 //*************************************************************************************************************
@@ -1420,11 +1425,25 @@ void Board::fight(
 	int8_t& attackingPlayerHealthChange,
 	int8_t& defendingPlayerHealthChange
 ) {
+	bool attackerDestroyed = false;
+	bool defenderDestroyed = false;
+
 	applyDrain(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
 	applyBreakthrough(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
-	applyLethal(attackCreature, defenseCreature);
-	applyDemage(attackCreature, defenseCreature);
+	applyLethal(attackCreature, defenseCreature, attackerDestroyed, defenderDestroyed);
+	applyDemage(attackCreature, defenseCreature, attackerDestroyed, defenderDestroyed);
 	applyWard(attackCreature, defenseCreature);
+
+	if (attackerDestroyed) {
+		destroyCreature(attackCreature.extractId());
+	}
+	else {
+		attackCreature.unsetAbility(CardMasks::CAN_ATTACK);
+	}
+
+	if (defenderDestroyed) {
+		destroyCreature(defenseCreature.extractId());
+	}
 }
 
 //*************************************************************************************************************
@@ -1438,7 +1457,7 @@ void Board::destroyCreature(int8_t creatureId) {
 		}
 	}
 
-	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
+	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < opponentCardsCount; ++opponentCreatureIdx) {
 		if (creatureId == opponentBoard[opponentCreatureIdx].extractId()) {
 			removeCard(opponentCreatureIdx, Side::OPPONENT);
 			break;
@@ -1453,24 +1472,27 @@ void Board::removeCard(int8_t cardIdx, Side side) {
 	if (MAX_BOARD_CREATURES - 1 == cardIdx) {
 		if (Side::PLAYER == side) {
 			playerBoard[cardIdx] = BoardCard();
-			--playerCardsCount;
 		}
 		else {
 			opponentBoard[cardIdx] = BoardCard();
-			--opponentCardsCount;
 		}
 	}
 	else {
 		for (; cardIdx < MAX_BOARD_CREATURES - 1; ++cardIdx) {
 			if (Side::PLAYER == side) {
 				playerBoard[cardIdx] = playerBoard[cardIdx + 1];
-				--playerCardsCount;
 			}
 			else {
 				opponentBoard[cardIdx] = opponentBoard[cardIdx + 1];
-				--opponentCardsCount;
 			}
 		}
+	}
+
+	if (Side::PLAYER == side) {
+		--playerCardsCount;
+	}
+	else {
+		--opponentCardsCount;
 	}
 }
 
@@ -1522,14 +1544,16 @@ void Board::applyBreakthrough(
 
 void Board::applyLethal(
 	BoardCard& attackCreature,
-	BoardCard& defenseCreature
+	BoardCard& defenseCreature,
+	bool& attackerDestroyed,
+	bool& defenderDestroyed
 ) {
 	if (attackCreature.hasAbility(CardMasks::LETHAL) && !defenseCreature.hasAbility(CardMasks::WARD)) {
-		destroyCreature(defenseCreature.extractId());
+		defenderDestroyed = true;
 	}
 
 	if (defenseCreature.hasAbility(CardMasks::LETHAL) && !attackCreature.hasAbility(CardMasks::WARD)) {
-		destroyCreature(attackCreature.extractId());
+		attackerDestroyed = true;
 	}
 }
 
@@ -1538,21 +1562,23 @@ void Board::applyLethal(
 
 void Board::applyDemage(
 	BoardCard& attackCreature,
-	BoardCard& defenseCreature
+	BoardCard& defenseCreature,
+	bool& attackerDestroyed,
+	bool& defenderDestroyed
 ) {
-	if (!defenseCreature.hasAbility(CardMasks::WARD)) {
-		//defenseCreature.setDefense(defenseCreature.extractDefense() - attackCreature.extractAttack());
+	if (!defenseCreature.hasAbility(CardMasks::WARD) && !defenderDestroyed) {
+		defenseCreature.setDefense(defenseCreature.extractDefense() - attackCreature.extractAttack());
 
 		if (defenseCreature.extractDefense() <= 0) {
-			destroyCreature(defenseCreature.extractId());
+			defenderDestroyed = true;
 		}
 	}
 
-	if (!attackCreature.hasAbility(CardMasks::WARD)) {
-		//attackCreature.setDefense(attackCreature.extractDefense() - defenseCreature.extractAttack());
+	if (!attackCreature.hasAbility(CardMasks::WARD) && !attackerDestroyed) {
+		attackCreature.setDefense(attackCreature.extractDefense() - defenseCreature.extractAttack());
 
 		if (attackCreature.extractDefense() <= 0) {
-			destroyCreature(attackCreature.extractId());
+			attackerDestroyed = true;
 		}
 	}
 }
