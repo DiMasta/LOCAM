@@ -43,6 +43,8 @@ static constexpr int MAX_CARDS_IN_HAND = 8;
 static constexpr int DEFAULT_CARD_TEMPLATE = 0;
 static constexpr int ABILITIES_COUNT = 6;
 
+static constexpr int8_t PLAYER_TARGET = -1;
+
 static constexpr float INVALID_CARD_VALUE = -1.f;
 
 static const string EMPTY_STRING = "";
@@ -118,6 +120,15 @@ namespace CardMasks {
 	static constexpr int DEFENSE = 240;			// 0000 0000 0000 0000 0000 0000 1111 0000
 	static constexpr int BOARD_CARD_ID = 16128;	// 0000 0000 0000 0000 0011 1111 0000 0000
 	static constexpr int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
+	static constexpr int CAN_ATTACK = 65536;	// 0000 0000 0001 0000 0000 0000 0000 0000
+
+	// Boardcard abilities masks
+	static constexpr int WARD			= 0b0000'0000'0000'0000'0100'0000'0000'0000;
+	static constexpr int LETHAL			= 0b0000'0000'0000'0000'1000'0000'0000'0000;
+	static constexpr int GUARD			= 0b0000'0000'0000'0001'0000'0000'0000'0000;
+	static constexpr int DRAIN			= 0b0000'0000'0000'0010'0000'0000'0000'0000;
+	static constexpr int CHARGE			= 0b0000'0000'0000'0100'0000'0000'0000'0000;
+	static constexpr int BREAKTHROUGH	= 0b0000'0000'0000'1000'0000'0000'0000'0000;
 };
 
 struct HandCombination {
@@ -957,6 +968,8 @@ void Hand::removeCard(int8_t cardId) {
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 
+typedef vector<int8_t> AttackTargets;
+
 class BoardCard {
 public:
 	BoardCard();
@@ -977,6 +990,8 @@ public:
 		int abilitiesBits
 	);
 
+	inline const AttackTargets& getTargets() const;
+
 	uint8_t extractId() const;
 	uint8_t extractAttack() const;
 	uint8_t extractDefense() const;
@@ -985,15 +1000,28 @@ public:
 	/// Returns true if the creature is destroyed
 	bool applyItemEffect(const Card& item);
 
+	bool canAttack() const;
+
+	inline bool hasAbility(int abilityFlag) const;
+	
+	inline void unsetAbility(int ablitFlag);
+	inline void setTargets(const AttackTargets& targets);
+	inline void setAttack(int attack);
+	inline void setDefense(int defense);
+
 	/// Removes creature from the board
 	// void destroy();
 
 private:
 	int card;
 	// somehow represent targets
+	AttackTargets targets;
 };
 
-BoardCard::BoardCard() {
+BoardCard::BoardCard() :
+	card(0),
+	targets()
+{
 
 }
 
@@ -1005,7 +1033,9 @@ BoardCard::BoardCard(
 	int attack,
 	int defense,
 	int abilities
-) {
+) :
+	targets()
+{
 	create(id, attack, defense, abilities);
 }
 
@@ -1035,6 +1065,13 @@ void BoardCard::create(
 
 	abilitiesBits <<= CardMasks::ABILITIES_OFFSET;
 	card |= abilitiesBits;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline const AttackTargets & BoardCard::getTargets() const {
+	return targets;
 }
 
 //*************************************************************************************************************
@@ -1093,6 +1130,49 @@ bool BoardCard::applyItemEffect(const Card& item) {
 	return creatureDead;
 }
 
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+bool BoardCard::canAttack() const {
+	return CardMasks::CAN_ATTACK & card;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline bool BoardCard::hasAbility(int abilityFlag) const {
+	return abilityFlag & card;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline void BoardCard::unsetAbility(int abilityFlag) {
+	card &= (~abilityFlag);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline void BoardCard::setTargets(const AttackTargets& targets) {
+	this->targets = targets;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline void BoardCard::setAttack(int attack) {
+	card |= attack;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline void BoardCard::setDefense(int defense) {
+	defense <<= CardMasks::DEFENSE_OFFSET;
+	card |= defense;
+}
+
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------
@@ -1104,12 +1184,20 @@ public:
 	Board(const Board& board);
 	~Board();
 
-	int getPlayerCardsCount() const {
+	int8_t getPlayerCardsCount() const {
 		return playerCardsCount;
 	}
 
-	int getOpponentCardsCount() const {
+	int8_t getOpponentCardsCount() const {
 		return opponentCardsCount;
+	}
+
+	const BoardCard& getPlayerBoardCard(int8_t cardIdx) const {
+		return playerBoard[cardIdx];
+	}
+
+	const BoardCard& getOpponentBoardCard(int8_t cardIdx) const {
+		return opponentBoard[cardIdx];
 	}
 
 	BoardCard (&getPlayerBoard())[MAX_BOARD_CREATURES] {
@@ -1125,14 +1213,48 @@ public:
 	void copy(const Board& board);
 	void addCard(const BoardCard& card, Side side);
 	void playItem(const Card& item, uint8_t target);
-	void removeCard(int cardIdx, Side side);
+	void performAttack(int8_t attCreatureId, int8_t defCreatureId);
+	void fight(BoardCard& attackCreature, BoardCard& defenseCreature);
+	void destroyCreature(int8_t creatureId);
+	void removeCard(int8_t cardIdx, Side side);
+
+	void applyDrain(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature,
+		int8_t& attackingPlayerHealthChange,
+		int8_t& defendingPlayerHealthChange
+	);
+
+	void applyBreakthrough(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature,
+		int8_t& attackingPlayerHealthChange,
+		int8_t& defendingPlayerHealthChange
+	);
+
+	void applyLethal(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature
+	);
+
+	void applyDemage(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature
+	);
+
+	void applyWard(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature
+	);
+
+	int8_t setAttackCreaturesTargets();
 
 private:
 	BoardCard playerBoard[MAX_BOARD_CREATURES];
-	int playerCardsCount;
+	int8_t playerCardsCount;
 
 	BoardCard opponentBoard[MAX_BOARD_CREATURES];
-	int opponentCardsCount;
+	int8_t opponentCardsCount;
 };
 
 //*************************************************************************************************************
@@ -1201,7 +1323,8 @@ void Board::addCard(const BoardCard& card, Side side) {
 void Board::playItem(const Card& item, uint8_t target) {
 	bool playerCardTarget = false;
 
-	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
+	// Based on the card type choose which array to iterate
+	for (int8_t cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
 		BoardCard& playerCard = playerBoard[cardIdx];
 		if (playerCard.extractId() == target) {
 			if (playerCard.applyItemEffect(item)) {
@@ -1213,7 +1336,7 @@ void Board::playItem(const Card& item, uint8_t target) {
 	}
 
 	if (!playerCardTarget) {
-		for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
+		for (int8_t cardIdx = 0; cardIdx < MAX_BOARD_CREATURES; ++cardIdx) {
 			BoardCard& opponentCard = opponentBoard[cardIdx];
 			if (opponentCard.extractId() == target) {
 				if (opponentCard.applyItemEffect(item)) {
@@ -1228,17 +1351,233 @@ void Board::playItem(const Card& item, uint8_t target) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::removeCard(int cardIdx, Side side) {
-	for (int cardIdx = 0; cardIdx < MAX_BOARD_CREATURES - 1; ++cardIdx) {
+void Board::performAttack(int8_t attCreatureId, int8_t defCreatureId) {
+	// May be here a pointer would be better
+	BoardCard& attackCreature = playerBoard[0];
+	BoardCard& defenseCreature = playerBoard[0];
+	
+	for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
+		BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
+		if (attCreatureId == playerBoardCard.extractId()) {
+			attackCreature = playerBoardCard;
+			break;
+		}
+		else if (defCreatureId == playerBoardCard.extractId()) {
+			defenseCreature = playerBoardCard;
+			break;
+		}
+	}
+
+	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
+		BoardCard& opponentBoardCard = playerBoard[opponentCreatureIdx];
+		if (attCreatureId == opponentBoardCard.extractId()) {
+			attackCreature = opponentBoardCard;
+			break;
+		}
+		else if (defCreatureId == opponentBoardCard.extractId()) {
+			defenseCreature = opponentBoardCard;
+			break;
+		}
+	}
+
+	fight(attackCreature, defenseCreature);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::fight(BoardCard& attackCreature, BoardCard& defenseCreature) {
+	int8_t attackingPlayerHealthChange = 0;
+	int8_t defendingPlayerHealthChange = 0;
+
+	applyDrain(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
+	applyBreakthrough(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
+	applyLethal(attackCreature, defenseCreature);
+	applyDemage(attackCreature, defenseCreature);
+	applyWard(attackCreature, defenseCreature);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::destroyCreature(int8_t creatureId) {
+	for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
+		if (creatureId == playerBoard[playerCreatureIdx].extractId()) {
+			removeCard(playerCreatureIdx, Side::PLAYER);
+			break;
+		}
+	}
+
+	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
+		if (creatureId == opponentBoard[opponentCreatureIdx].extractId()) {
+			removeCard(opponentCreatureIdx, Side::OPPONENT);
+			break;
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::removeCard(int8_t cardIdx, Side side) {
+	if (MAX_BOARD_CREATURES - 1 == cardIdx) {
 		if (Side::PLAYER == side) {
-			playerBoard[cardIdx] = playerBoard[cardIdx + 1];
+			playerBoard[cardIdx] = BoardCard();
 			--playerCardsCount;
 		}
 		else {
-			opponentBoard[cardIdx] = opponentBoard[cardIdx + 1];
+			opponentBoard[cardIdx] = BoardCard();
 			--opponentCardsCount;
 		}
 	}
+	else {
+		for (; cardIdx < MAX_BOARD_CREATURES - 1; ++cardIdx) {
+			if (Side::PLAYER == side) {
+				playerBoard[cardIdx] = playerBoard[cardIdx + 1];
+				--playerCardsCount;
+			}
+			else {
+				opponentBoard[cardIdx] = opponentBoard[cardIdx + 1];
+				--opponentCardsCount;
+			}
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::applyDrain(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature,
+	int8_t& attackingPlayerHealthChange,
+	int8_t& defendingPlayerHealthChange
+){
+	if (attackCreature.hasAbility(CardMasks::DRAIN) && !defenseCreature.hasAbility(CardMasks::WARD)) {
+		attackingPlayerHealthChange += attackCreature.extractAttack();
+	}
+
+	if (defenseCreature.hasAbility(CardMasks::DRAIN) && !attackCreature.hasAbility(CardMasks::WARD)) {
+		defendingPlayerHealthChange += defenseCreature.extractAttack();
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::applyBreakthrough(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature,
+	int8_t& attackingPlayerHealthChange,
+	int8_t& defendingPlayerHealthChange
+) {
+	int8_t attack = attackCreature.extractAttack();
+	int8_t defense = defenseCreature.extractDefense();
+
+	if (attackCreature.hasAbility(CardMasks::BREAKTHROUGH) &&
+		attack > defense &&
+		!defenseCreature.hasAbility(CardMasks::WARD)) {
+		defendingPlayerHealthChange -= attack - defense;
+	}
+
+	if (defenseCreature.hasAbility(CardMasks::BREAKTHROUGH) &&
+		defense > attack &&
+		!attackCreature.hasAbility(CardMasks::WARD)) {
+		attackingPlayerHealthChange -= defense - attack;
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::applyLethal(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature
+) {
+	if (attackCreature.hasAbility(CardMasks::LETHAL) && !defenseCreature.hasAbility(CardMasks::WARD)) {
+		destroyCreature(defenseCreature.extractId());
+	}
+
+	if (defenseCreature.hasAbility(CardMasks::LETHAL) && !attackCreature.hasAbility(CardMasks::WARD)) {
+		destroyCreature(attackCreature.extractId());
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::applyDemage(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature
+) {
+	if (!defenseCreature.hasAbility(CardMasks::WARD)) {
+		//defenseCreature.setDefense(defenseCreature.extractDefense() - attackCreature.extractAttack());
+
+		if (defenseCreature.extractDefense() <= 0) {
+			destroyCreature(defenseCreature.extractId());
+		}
+	}
+
+	if (!attackCreature.hasAbility(CardMasks::WARD)) {
+		//attackCreature.setDefense(attackCreature.extractDefense() - defenseCreature.extractAttack());
+
+		if (attackCreature.extractDefense() <= 0) {
+			destroyCreature(attackCreature.extractId());
+		}
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void Board::applyWard(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature
+) {
+	if (attackCreature.extractAttack() > 0) {
+		defenseCreature.unsetAbility(CardMasks::WARD);
+	}
+
+	if (defenseCreature.extractAttack() > 0) {
+		attackCreature.unsetAbility(CardMasks::WARD);
+	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int8_t Board::setAttackCreaturesTargets() {
+	int8_t allTargetsCount = 0;
+
+	for (int8_t attCreatureIdx = 0; attCreatureIdx < playerCardsCount; ++attCreatureIdx) {
+		BoardCard& attCreature = playerBoard[attCreatureIdx];
+		if (attCreature.canAttack()) {
+			AttackTargets guardTargets;
+			AttackTargets targets;
+
+			for (int8_t defCreatureIdx = 0; defCreatureIdx < opponentCardsCount; ++defCreatureIdx) {
+				const BoardCard& defCreature = opponentBoard[defCreatureIdx];
+				int8_t defCreatureId = defCreature.extractId();
+				targets.push_back(defCreatureId);
+
+				if (defCreature.hasAbility(CardMasks::GUARD)) {
+					guardTargets.push_back(defCreatureId);
+				}
+			}
+
+			if (0 < guardTargets.size()) {
+				attCreature.setTargets(guardTargets);
+			}
+			else {
+				targets.push_back(PLAYER_TARGET);
+				attCreature.setTargets(targets);
+			}
+
+			allTargetsCount += static_cast<int8_t>(attCreature.getTargets().size());
+		}
+	}
+
+	return allTargetsCount;
 }
 
 //*************************************************************************************************************
@@ -1408,12 +1747,16 @@ public:
 	void setItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
 	void checkForItemsToPlay();
+	void performAttack(int8_t attCreatureId, int8_t defCreatureId);
+	
+	inline int8_t setAttackCreaturesTargets();
 
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
 
 private:
 	StateSimulationType simType;
+	// TODO: make state flags, containing active player and simType
 	int8_t opponentHealth;
 	Player player;
 	Hand playerHand;
@@ -1515,6 +1858,7 @@ void GameState::playCards() {
 			continue;
 		}
 
+		// TODO: use const reference
 		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardNumber];
 
 		if (StateSimulationType::PLAY_CREATURES == simType &&
@@ -1674,6 +2018,20 @@ void GameState::checkForItemsToPlay() {
 	if (!itemToBePlyed) {
 		simType = StateSimulationType::PERFORM_ATTACKS;
 	}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::performAttack(int8_t attCreatureId, int8_t defCreatureId) {
+	board.performAttack(attCreatureId, defCreatureId);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+inline int8_t GameState::setAttackCreaturesTargets() {
+	return board.setAttackCreaturesTargets();
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -2016,6 +2374,7 @@ void GameTree::build() {
 		const NodeId parentId = nodesQueue.front();
 		nodesQueue.pop();
 
+		// TODO: if no reordering will be performed, chidren may be added in "createChildren"
 		NodesVector children;
 		createChildren(parentId, children);
 		for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
@@ -2048,6 +2407,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 		parentState->getAllHandCombinations(cardCombinations);
 
 		for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
+			// TODO: first create node with parent state, then simulate it, to reduce one copy
 			GameState childState = *parentState;
 			childState.setMove(EMPTY_STRING);
 			childState.setHandCombination(cardCombinations[combIdx]);
@@ -2077,6 +2437,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 					const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
 					// each target, for item, makes new state
 					for (uint8_t target : itemTargets) {
+						// TODO: first create node with parent state, then simulate it, to reduce one copy
 						GameState childState = *parentState;
 						childState.setMove(EMPTY_STRING);
 						childState.playItem(card, target);
@@ -2090,6 +2451,35 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 					}
 
 					break; // Play one item, for all targets, at a time
+				}
+			}
+		}
+	}
+	else if (StateSimulationType::PERFORM_ATTACKS == parentState->getSimType()) {
+		// first fill all creatures targets
+		int8_t allTargetsCount = parentState->setAttackCreaturesTargets();
+
+		if (0 == allTargetsCount) {
+			// No targets to attack
+			parentState->setSimType(StateSimulationType::INVALID);
+		}
+		else {
+			const Board& board = parentState->getBoard();
+
+			// for all attack creatures and all targets make states 
+			for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
+				const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
+				const AttackTargets& targets = playerBoardCard.getTargets();
+
+				for (int8_t targetId : targets) {
+					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+					GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+
+					int8_t attCreatureId = playerBoardCard.extractId();
+					childState->performAttack(attCreatureId, targetId);
+					childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId));
+
+					children.push_back(childNodeId);
 				}
 			}
 		}
