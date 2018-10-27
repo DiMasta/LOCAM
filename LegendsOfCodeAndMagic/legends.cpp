@@ -107,8 +107,8 @@ namespace CardMasks {
 	static constexpr int HAND_CARD_ID_OFFSET = 8;
 	static constexpr int HAND_CARD_COMB_OFFSET = 8;
 
-	static constexpr int NUMBER = 255;			// 0000 0000 0000 0000 0000 0000 1111 1111
-	static constexpr int HAND_CARD_ID = 16128;	// 0000 0000 0000 0000 0011 1111 0000 0000
+	static constexpr int NUMBER			= 0b0000'0000'0000'0000'0000'0000'1111'1111;
+	static constexpr int HAND_CARD_ID	= 0b0000'0000'0000'0000'0011'1111'0000'0000;
 
 	// Boardcard masks
 	static constexpr int ATTACK_OFFSET = 0;
@@ -116,11 +116,11 @@ namespace CardMasks {
 	static constexpr int BOARD_CARD_ID_OFFSET = 8;
 	static constexpr int ABILITIES_OFFSET = 14;
 	
-	static constexpr int ATTACK = 15;			// 0000 0000 0000 0000 0000 0000 0000 1111
-	static constexpr int DEFENSE = 240;			// 0000 0000 0000 0000 0000 0000 1111 0000
-	static constexpr int BOARD_CARD_ID = 16128;	// 0000 0000 0000 0000 0011 1111 0000 0000
-	static constexpr int ABILITIES = 64512;		// 0000 0000 0000 1111 1100 0000 0000 0000
-	static constexpr int CAN_ATTACK = 65536;	// 0000 0000 0001 0000 0000 0000 0000 0000
+	static constexpr int ATTACK			= 0b0000'0000'0000'0000'0000'0000'0000'1111;
+	static constexpr int DEFENSE		= 0b0000'0000'0000'0000'0000'0000'1111'0000;
+	static constexpr int BOARD_CARD_ID	= 0b0000'0000'0000'0000'0011'1111'0000'0000;
+	static constexpr int ABILITIES		= 0b0000'0000'0000'1111'1100'0000'0000'0000;
+	static constexpr int CAN_ATTACK		= 0b0000'0000'0001'0000'0000'0000'0000'0000;
 
 	// Boardcard abilities masks
 	static constexpr int WARD			= 0b0000'0000'0000'0000'0100'0000'0000'0000;
@@ -1216,10 +1216,22 @@ public:
 	void copy(const Board& board);
 	void addCard(const BoardCard& card, Side side);
 	void playItem(const Card& item, uint8_t target);
-	void performAttack(int8_t attCreatureId, int8_t defCreatureId);
-	void fight(BoardCard& attackCreature, BoardCard& defenseCreature);
 	void destroyCreature(int8_t creatureId);
 	void removeCard(int8_t cardIdx, Side side);
+
+	void performAttack(
+		const int8_t attCreatureId,
+		const int8_t defCreatureId,
+		int8_t& attackingPlayerHealthChange,
+		int8_t& defendingPlayerHealthChange
+	);
+
+	void fight(
+		BoardCard& attackCreature,
+		BoardCard& defenseCreature,
+		int8_t& attackingPlayerHealthChange,
+		int8_t& defendingPlayerHealthChange
+	);
 
 	void applyDrain(
 		BoardCard& attackCreature,
@@ -1354,45 +1366,60 @@ void Board::playItem(const Card& item, uint8_t target) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::performAttack(int8_t attCreatureId, int8_t defCreatureId) {
+void Board::performAttack(
+	const int8_t attCreatureId,
+	const int8_t defCreatureId,
+	int8_t& attackingPlayerHealthChange,
+	int8_t& defendingPlayerHealthChange
+) {
 	// May be here a pointer would be better
 	BoardCard& attackCreature = playerBoard[0];
-	BoardCard& defenseCreature = playerBoard[0];
-	
-	for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
-		BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
-		if (attCreatureId == playerBoardCard.extractId()) {
-			attackCreature = playerBoardCard;
-			break;
+
+	if (PLAYER_TARGET != defCreatureId) {
+		BoardCard& defenseCreature = playerBoard[0];
+
+		for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
+			BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
+			if (attCreatureId == playerBoardCard.extractId()) {
+				attackCreature = playerBoardCard;
+				break;
+			}
+			else if (defCreatureId == playerBoardCard.extractId()) {
+				defenseCreature = playerBoardCard;
+				break;
+			}
 		}
-		else if (defCreatureId == playerBoardCard.extractId()) {
-			defenseCreature = playerBoardCard;
-			break;
+
+		for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
+			BoardCard& opponentBoardCard = playerBoard[opponentCreatureIdx];
+			if (attCreatureId == opponentBoardCard.extractId()) {
+				attackCreature = opponentBoardCard;
+				break;
+			}
+			else if (defCreatureId == opponentBoardCard.extractId()) {
+				defenseCreature = opponentBoardCard;
+				break;
+			}
 		}
+
+		fight(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
+	}
+	else {
+		defendingPlayerHealthChange -= attackCreature.extractAttack();
 	}
 
-	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
-		BoardCard& opponentBoardCard = playerBoard[opponentCreatureIdx];
-		if (attCreatureId == opponentBoardCard.extractId()) {
-			attackCreature = opponentBoardCard;
-			break;
-		}
-		else if (defCreatureId == opponentBoardCard.extractId()) {
-			defenseCreature = opponentBoardCard;
-			break;
-		}
-	}
-
-	fight(attackCreature, defenseCreature);
+	attackCreature.unsetAbility(CardMasks::CAN_ATTACK);
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void Board::fight(BoardCard& attackCreature, BoardCard& defenseCreature) {
-	int8_t attackingPlayerHealthChange = 0;
-	int8_t defendingPlayerHealthChange = 0;
-
+void Board::fight(
+	BoardCard& attackCreature,
+	BoardCard& defenseCreature,
+	int8_t& attackingPlayerHealthChange,
+	int8_t& defendingPlayerHealthChange
+) {
 	applyDrain(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
 	applyBreakthrough(attackCreature, defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
 	applyLethal(attackCreature, defenseCreature);
@@ -1750,7 +1777,14 @@ public:
 	void setItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
 	void checkForItemsToPlay();
-	void performAttack(int8_t attCreatureId, int8_t defCreatureId);
+	void setPlayerHealth(const int8_t health);
+	
+	void performAttack(
+		const int8_t attCreatureId,
+		const int8_t defCreatureId,
+		int8_t& attackingPlayerHealthChange,
+		int8_t& defendingPlayerHealthChange
+	);
 	
 	inline int8_t setAttackCreaturesTargets();
 
@@ -2026,8 +2060,20 @@ void GameState::checkForItemsToPlay() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameState::performAttack(int8_t attCreatureId, int8_t defCreatureId) {
-	board.performAttack(attCreatureId, defCreatureId);
+void GameState::setPlayerHealth(const int8_t health) {
+	player.setHealth(health);
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameState::performAttack(
+	const int8_t attCreatureId,
+	const int8_t defCreatureId,
+	int8_t& attackingPlayerHealthChange,
+	int8_t& defendingPlayerHealthChange
+) {
+	board.performAttack(attCreatureId, defCreatureId, attackingPlayerHealthChange, defendingPlayerHealthChange);
 }
 
 //*************************************************************************************************************
@@ -2453,7 +2499,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 						children.push_back(childNodeId);
 					}
 
-					break; // Play one item, for all targets, at a time
+					//break; // Play one item, for all targets, at a time
 				}
 			}
 		}
@@ -2478,8 +2524,12 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 					GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 
+					int8_t attackingPlayerHealthChange = 0;
+					int8_t defendingPlayerHealthChange = 0;
 					int8_t attCreatureId = playerBoardCard.extractId();
-					childState->performAttack(attCreatureId, targetId);
+					childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
+					childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
+					childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
 					childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId));
 
 					children.push_back(childNodeId);
