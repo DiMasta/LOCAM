@@ -1000,11 +1000,10 @@ public:
 	/// Returns true if the creature is destroyed
 	bool applyItemEffect(const Card& item);
 
-	bool canAttack() const;
-
 	inline bool hasAbility(int abilityFlag) const;
 	
-	inline void unsetAbility(int ablitFlag);
+	inline void setAbility(int abilityFlag);
+	inline void unsetAbility(int abilityFlag);
 	inline void setTargets(const AttackTargets& targets);
 	inline void setAttack(int attack);
 	inline void setDefense(int defense);
@@ -1065,6 +1064,10 @@ void BoardCard::create(
 
 	abilitiesBits <<= CardMasks::ABILITIES_OFFSET;
 	card |= abilitiesBits;
+
+	if (hasAbility(CardMasks::CHARGE)) {
+		setAbility(CardMasks::CAN_ATTACK);
+	}
 }
 
 //*************************************************************************************************************
@@ -1133,15 +1136,15 @@ bool BoardCard::applyItemEffect(const Card& item) {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-bool BoardCard::canAttack() const {
-	return CardMasks::CAN_ATTACK & card;
+inline bool BoardCard::hasAbility(int abilityFlag) const {
+	return abilityFlag & card;
 }
 
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-inline bool BoardCard::hasAbility(int abilityFlag) const {
-	return abilityFlag & card;
+inline void BoardCard::setAbility(int abilityFlag) {
+	card |= abilityFlag;
 }
 
 //*************************************************************************************************************
@@ -1551,7 +1554,7 @@ int8_t Board::setAttackCreaturesTargets() {
 
 	for (int8_t attCreatureIdx = 0; attCreatureIdx < playerCardsCount; ++attCreatureIdx) {
 		BoardCard& attCreature = playerBoard[attCreatureIdx];
-		if (attCreature.canAttack()) {
+		if (attCreature.hasAbility(CardMasks::CAN_ATTACK)) {
 			AttackTargets guardTargets;
 			AttackTargets targets;
 
@@ -2801,11 +2804,13 @@ void Game::addBattleCard(const Card& card) {
 		}
 		case CardLocation::PLAYER_BOARD: {
 			BoardCard boardCard(card.getId(), card.getAtt(), card.getDef(), card.getBitsAbilities());
+			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::PLAYER);
 			break;
 		}
 		case CardLocation::OPPONENT_BOARD: {
 			BoardCard boardCard(card.getId(), card.getAtt(), card.getDef(), card.getBitsAbilities());
+			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::OPPONENT);
 			break;
 		}
