@@ -1381,38 +1381,38 @@ void Board::performAttack(
 	int8_t& defendingPlayerHealthChange
 ) {
 	BoardCard* attackCreature = nullptr;
+	BoardCard* defenseCreature = nullptr;
+
+	for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
+		BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
+		if (attCreatureId == playerBoardCard.extractId()) {
+			attackCreature = &playerBoardCard;
+			break;
+		}
+		else if (defCreatureId == playerBoardCard.extractId()) {
+			defenseCreature = &playerBoardCard;
+			break;
+		}
+	}
+
+	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < opponentCardsCount; ++opponentCreatureIdx) {
+		BoardCard& opponentBoardCard = opponentBoard[opponentCreatureIdx];
+		if (attCreatureId == opponentBoardCard.extractId()) {
+			attackCreature = &opponentBoardCard;
+			break;
+		}
+		else if (defCreatureId == opponentBoardCard.extractId()) {
+			defenseCreature = &opponentBoardCard;
+			break;
+		}
+	}
 
 	if (PLAYER_TARGET != defCreatureId) {
-		BoardCard* defenseCreature = nullptr;
-
-		for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
-			BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
-			if (attCreatureId == playerBoardCard.extractId()) {
-				attackCreature = &playerBoardCard;
-				break;
-			}
-			else if (defCreatureId == playerBoardCard.extractId()) {
-				defenseCreature = &playerBoardCard;
-				break;
-			}
-		}
-
-		for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < playerCardsCount; ++opponentCreatureIdx) {
-			BoardCard& opponentBoardCard = opponentBoard[opponentCreatureIdx];
-			if (attCreatureId == opponentBoardCard.extractId()) {
-				attackCreature = &opponentBoardCard;
-				break;
-			}
-			else if (defCreatureId == opponentBoardCard.extractId()) {
-				defenseCreature = &opponentBoardCard;
-				break;
-			}
-		}
-
 		fight(*attackCreature, *defenseCreature, attackingPlayerHealthChange, defendingPlayerHealthChange);
 	}
 	else {
 		defendingPlayerHealthChange -= attackCreature->extractAttack();
+		attackCreature->unsetAbility(CardMasks::CAN_ATTACK);
 	}
 }
 
@@ -2497,6 +2497,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 	}
 	else if (StateSimulationType::PLAY_ITEMS == parentState->getSimType()) {
 		const HandCombination& handCombination = parentState->getHandCombinaiton();
+		bool itemPlayed = false;
 
 		for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
 			if (handCombination.cardPlayed(cardIdx)) {
@@ -2523,11 +2524,21 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 						NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
 						children.push_back(childNodeId);
+
+						itemPlayed = true;
 					}
 
 					//break; // Play one item, for all targets, at a time
 				}
 			}
+		}
+
+		if (!itemPlayed) {
+			// Dummy state to enforece performing attacks
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+			childState->setSimType(StateSimulationType::PERFORM_ATTACKS);
+			children.push_back(childNodeId);
 		}
 	}
 	else if (StateSimulationType::PERFORM_ATTACKS == parentState->getSimType()) {
