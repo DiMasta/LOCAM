@@ -93,6 +93,7 @@ enum class StateSimulationType : int8_t {
 	PLAY_CREATURES,
 	PLAY_ITEMS,
 	PERFORM_ATTACKS,
+	EVALUATE,
 };
 
 enum class HandCombProperty : int8_t {
@@ -1814,6 +1815,8 @@ public:
 	
 	inline int8_t setAttackCreaturesTargets();
 
+	int evaluate() const;
+
 	// Evaluate
 	// Get possible moves, based on state type, hand or battle
 
@@ -2107,6 +2110,22 @@ void GameState::performAttack(
 
 inline int8_t GameState::setAttackCreaturesTargets() {
 	return board.setAttackCreaturesTargets();
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int GameState::evaluate() const {
+	int evaluation = 0;
+
+	if ((opponentHealth <= 0) && (player.getHealth() > 0)) {
+		evaluation = INT_MAX;
+	}
+	else if ((opponentHealth > 0) && (player.getHealth() <= 0)) {
+		evaluation = INT_MIN;
+	}
+
+	return evaluation;
 }
 
 //-------------------------------------------------------------------------------------------------------------
@@ -2408,11 +2427,12 @@ public:
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
 
-	void createChildren(NodeId parentId, NodesVector& children);
-	void createPlayedCardsChildren(Node* parent, NodesVector& children);
+	void createPlayedCardsChildren(NodeId parentId, NodesVector& children);
 
 private:
 	GameState turnState;
+	NodeId bestNode;
+	int bestEvaluation;
 
 	Graph gameTree;
 };
@@ -2451,7 +2471,7 @@ void GameTree::build() {
 
 		// TODO: if no reordering will be performed, chidren may be added in "createChildren"
 		NodesVector children;
-		createChildren(parentId, children);
+		createPlayedCardsChildren(parentId, children);
 		for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
 			nodesQueue.push(children[childIdx]);
 		}
@@ -2461,19 +2481,8 @@ void GameTree::build() {
 //*************************************************************************************************************
 //*************************************************************************************************************
 
-void GameTree::createChildren(NodeId parentId, NodesVector& children) {
+void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children) {
 	Node* parent = gameTree.getNode(parentId);
-	int parentDepth = parent->getDepth();
-
-	createPlayedCardsChildren(parent, children);
-
-	// perform attacks children
-}
-
-//*************************************************************************************************************
-//*************************************************************************************************************
-
-void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 	GameState* parentState = parent->getGameState();
 
 	// First play all creatures
@@ -2547,7 +2556,7 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 
 		if (0 == allTargetsCount) {
 			// No targets to attack
-			parentState->setSimType(StateSimulationType::INVALID);
+			parentState->setSimType(StateSimulationType::EVALUATE);
 		}
 		else {
 			const Board& board = parentState->getBoard();
@@ -2574,6 +2583,13 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 					}
 				}
 			}
+		}
+	}
+	else if (StateSimulationType::EVALUATE == parentState->getSimType()) {
+		int evaluation = parentState->evaluate();
+		if (evaluation > bestEvaluation) {
+			evaluation = bestEvaluation;
+			bestNode = parentId;
 		}
 	}
 }
