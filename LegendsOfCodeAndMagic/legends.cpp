@@ -2555,21 +2555,23 @@ void GameTree::createPlayedCardsChildren(Node* parent, NodesVector& children) {
 			// for all attack creatures and all targets make states 
 			for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
 				const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
-				const AttackTargets& targets = playerBoardCard.getTargets();
 
-				for (int8_t targetId : targets) {
-					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-					GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+				if (playerBoardCard.hasAbility(CardMasks::CAN_ATTACK)) {
+					const AttackTargets& targets = playerBoardCard.getTargets();
+					for (int8_t targetId : targets) {
+						NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+						GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 
-					int8_t attackingPlayerHealthChange = 0;
-					int8_t defendingPlayerHealthChange = 0;
-					int8_t attCreatureId = playerBoardCard.extractId();
-					childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
-					childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
-					childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
-					childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId));
+						int8_t attackingPlayerHealthChange = 0;
+						int8_t defendingPlayerHealthChange = 0;
+						int8_t attCreatureId = playerBoardCard.extractId();
+						childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
+						childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
+						childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
+						childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId));
 
-					children.push_back(childNodeId);
+						children.push_back(childNodeId);
+					}
 				}
 			}
 		}
