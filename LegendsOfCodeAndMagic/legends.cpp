@@ -88,6 +88,12 @@ enum class Side : int8_t {
 	OPPONENT,
 };
 
+enum class BoardSum : int8_t {
+	INVALID = -1,
+	ATT,
+	DEF,
+};
+
 enum class StateSimulationType : int8_t {
 	INVALID = -1,
 	PLAY_CREATURES,
@@ -130,6 +136,14 @@ namespace CardMasks {
 	static constexpr int DRAIN			= 0b0000'0000'0000'0010'0000'0000'0000'0000;
 	static constexpr int CHARGE			= 0b0000'0000'0000'0100'0000'0000'0000'0000;
 	static constexpr int BREAKTHROUGH	= 0b0000'0000'0000'1000'0000'0000'0000'0000;
+};
+
+namespace Weights {
+	static constexpr int CREATURES_COUNT_DIFF = 300;
+	static constexpr int HEALTH_DIFF = 100;
+	static constexpr int ATTACKS_DIFF = 200;
+	static constexpr int DEFENSES_DIFF = 200;
+	static constexpr int HAND_CARDS = 150;
 };
 
 struct HandCombination {
@@ -1273,6 +1287,8 @@ public:
 
 	int8_t setAttackCreaturesTargets();
 
+	int getBoardSum(Side side, BoardSum sumType) const;
+
 private:
 	BoardCard playerBoard[MAX_BOARD_CREATURES];
 	int8_t playerCardsCount;
@@ -1635,6 +1651,33 @@ int8_t Board::setAttackCreaturesTargets() {
 	}
 
 	return allTargetsCount;
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+int Board::getBoardSum(Side side, BoardSum sumType) const {
+	int sum = 0;
+
+	int8_t count = playerCardsCount;
+	const BoardCard* boardCards = playerBoard;
+
+	if (Side::OPPONENT == side) {
+		count = opponentCardsCount;
+		boardCards = opponentBoard;
+	}
+
+	for (int8_t cardIdx = 0; cardIdx < count; ++cardIdx) {
+		const BoardCard& card = boardCards[cardIdx];
+		if (BoardSum::ATT == sumType) {
+			sum += card.extractAttack();
+		}
+		else {
+			sum += card.extractDefense();
+		}
+	}
+
+	return sum;
 }
 
 //*************************************************************************************************************
@@ -2117,12 +2160,32 @@ inline int8_t GameState::setAttackCreaturesTargets() {
 
 int GameState::evaluate() const {
 	int evaluation = 0;
+	const int playerHealth = player.getHealth();
 
-	if ((opponentHealth <= 0) && (player.getHealth() > 0)) {
+	if ((opponentHealth <= 0) && (playerHealth > 0)) {
 		evaluation = INT_MAX;
 	}
-	else if ((opponentHealth > 0) && (player.getHealth() <= 0)) {
+	else if ((opponentHealth > 0) && (playerHealth <= 0)) {
 		evaluation = INT_MIN;
+	}
+	else {
+		const int healthDiff = playerHealth - opponentHealth;
+		evaluation += healthDiff * Weights::HEALTH_DIFF;
+
+		const int creaturesCountDiff = board.getPlayerCardsCount() - board.getOpponentCardsCount();
+		evaluation += creaturesCountDiff * Weights::CREATURES_COUNT_DIFF;
+
+		const int playerAttacks = board.getBoardSum(Side::PLAYER, BoardSum::ATT);
+		const int opponentAttacks = board.getBoardSum(Side::OPPONENT, BoardSum::DEF);
+		const int attacksDiff = playerAttacks - opponentAttacks;
+		evaluation += attacksDiff * Weights::ATTACKS_DIFF;
+
+		const int playerDefenses = board.getBoardSum(Side::PLAYER, BoardSum::ATT);
+		const int oppenentDefenses = board.getBoardSum(Side::OPPONENT, BoardSum::DEF);
+		const int defensesDiff = playerDefenses - oppenentDefenses;
+		evaluation += defensesDiff * Weights::DEFENSES_DIFF;
+
+		evaluation += player.getAdditionalCards() * Weights::HAND_CARDS;
 	}
 
 	return evaluation;
