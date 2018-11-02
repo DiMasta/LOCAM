@@ -2489,8 +2489,8 @@ public:
 
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
-
 	void createPlayedCardsChildren(NodeId parentId, NodesVector& children);
+	void getBestMoves(string& bestMoves) const;
 
 private:
 	GameState turnState;
@@ -2505,7 +2505,9 @@ private:
 
 GameTree::GameTree() :
 	turnState(),
-	gameTree()
+	gameTree(),
+	bestNode(INVALID_NODE_ID),
+	bestEvaluation(INT_MIN)
 {
 
 }
@@ -2620,6 +2622,12 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 		if (0 == allTargetsCount) {
 			// No targets to attack
 			parentState->setSimType(StateSimulationType::EVALUATE);
+
+			int evaluation = parentState->evaluate();
+			if (evaluation > bestEvaluation) {
+				bestEvaluation = evaluation;
+				bestNode = parentId;
+			}
 		}
 		else {
 			const Board& board = parentState->getBoard();
@@ -2640,7 +2648,7 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 						childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
 						childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
 						childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
-						childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId));
+						childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId) + END_EXPRESSION);
 
 						children.push_back(childNodeId);
 					}
@@ -2648,12 +2656,19 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 			}
 		}
 	}
-	else if (StateSimulationType::EVALUATE == parentState->getSimType()) {
-		int evaluation = parentState->evaluate();
-		if (evaluation > bestEvaluation) {
-			evaluation = bestEvaluation;
-			bestNode = parentId;
-		}
+}
+
+//*************************************************************************************************************
+//*************************************************************************************************************
+
+void GameTree::getBestMoves(string& bestMoves) const {
+	Node* currentNode = gameTree.getNode(bestNode);
+	NodeId parentId = currentNode->getParentId();
+
+	while (INVALID_NODE_ID != parentId) {
+		bestMoves.insert(0, currentNode->getGameState()->getMove());
+		currentNode = gameTree.getNode(parentId);
+		parentId = currentNode->getParentId();
 	}
 }
 
@@ -3001,7 +3016,11 @@ void Game::makeDraftTurn() {
 void Game::makeBattleTurn() {
 	initGameTree();
 	gameTree.build();
-	//gameTree.getBestMoves();
+
+	string bestMoves = EMPTY_STRING;
+	gameTree.getBestMoves(bestMoves);
+
+	cout << bestMoves << "\n";
 }
 
 //*************************************************************************************************************
