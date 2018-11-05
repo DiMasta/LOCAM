@@ -766,7 +766,6 @@ void Hand::copy(const Hand& hand) {
 
 void Hand::addCard(const HandCard& card) {
 	cards[cardsCount++] = card;
-	//cerr << static_cast<int>(cardsCount) << endl;
 }
 
 bool Hand::uniqueCombination(
@@ -896,7 +895,6 @@ public:
 
 private:
 	int card;
-	// somehow represent targets
 	AttackTargets targets;
 };
 
@@ -1014,7 +1012,7 @@ inline void BoardCard::setDefense(int defense) {
 	}
 
 	defense <<= CardMasks::DEFENSE_OFFSET;
-	card &= (~CardMasks::DEFENSE) | defense;
+	card = (card & (~CardMasks::DEFENSE)) | defense;
 }
 
 class Board {
@@ -1595,6 +1593,8 @@ public:
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
 	void checkForItemsToPlay();
 	void setPlayerHealth(const int8_t health);
+
+	bool checkIfPlayerDiesNextTurn() const;
 	
 	void performAttack(
 		const int8_t attCreatureId,
@@ -1606,9 +1606,6 @@ public:
 	inline int8_t setAttackCreaturesTargets();
 
 	int evaluate() const;
-
-	// Evaluate
-	// Get possible moves, based on state type, hand or battle
 
 private:
 	StateSimulationType simType;
@@ -1840,6 +1837,12 @@ void GameState::setPlayerHealth(const int8_t health) {
 	player.setHealth(health);
 }
 
+bool GameState::checkIfPlayerDiesNextTurn() const {
+	const int opponentAttacks = board.getBoardSum(Side::OPPONENT, BoardSum::ATT);
+
+	return opponentAttacks >= static_cast<int>(player.getHealth());
+}
+ 
 void GameState::performAttack(
 	const int8_t attCreatureId,
 	const int8_t defCreatureId,
@@ -1861,6 +1864,9 @@ int GameState::evaluate() const {
 		evaluation = INT_MAX;
 	}
 	else if ((opponentHealth > 0) && (playerHealth <= 0)) {
+		evaluation = INT_MIN;
+	}
+	else if (checkIfPlayerDiesNextTurn()) {
 		evaluation = INT_MIN;
 	}
 	else {
@@ -1932,7 +1938,6 @@ private:
 	NodeId parentId;
 
 	GameState gameState;
-	// Move move; // the move which makes this GameState (may be encoded in char)
 };
 
 Node::Node() :
@@ -2233,8 +2238,6 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 
 						itemPlayed = true;
 					}
-
-					//break; // Play one item, for all targets, at a time
 				}
 			}
 		}
