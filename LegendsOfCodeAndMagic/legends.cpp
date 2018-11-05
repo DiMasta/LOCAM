@@ -800,21 +800,18 @@ void Hand::getAllCombinations(
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
 				const HandCard* card = &cards[cardIdx];
-				uint8_t number = card->extractNumber();
-				//if (playableCard(simType, number)) {
-					int8_t id = card->extractId();
+				long long number = static_cast<long long>(card->extractNumber());
+				long long id = static_cast<long long>(card->extractId());
 
-					combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
+				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
 
-					combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
-					combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
-				//}
+				combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
+				combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 			}
 		}
 
 		if (combination.cardsNumbers > 0 &&
 			combinationCost <= mana
-			//&& uniqueCombination(handCombinations, combination)
 		) {
 			handCombinations.push_back(combination);
 		}
@@ -2229,7 +2226,7 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 						childState.setHandCombination(handCombination);
 						childState.setPlayedCardInHandCombination(cardIdx);
 						childState.checkForItemsToPlay();
-						childState.setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target));
+						childState.setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
 
 						NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
 						children.push_back(childNodeId);
@@ -2445,7 +2442,7 @@ void Game::getTurnInput() {
 		}
 
 #ifdef OUTPUT_GAME_DATA
-		cerr << playerHealth << " " << playerMana << " " << playerDeck << " " << playerRune << " " << playerDraw << endl;
+		cerr << playerHealth << "\t" << playerMana << "\t" << playerDeck << "\t" << playerRune << "\t" << playerDraw << endl;
 #endif
 	}
 
@@ -2453,7 +2450,7 @@ void Game::getTurnInput() {
 	int opponentActions;
 	cin >> opponentHand >> opponentActions; cin.ignore();
 #ifdef OUTPUT_GAME_DATA
-	cerr << opponentHand << " " << opponentActions << endl;
+	cerr << opponentHand << "\t" << opponentActions << endl;
 #endif
 	for (int i = 0; i < opponentActions; i++) {
 		string cardNumberAndAction;
@@ -2486,7 +2483,7 @@ void Game::getTurnInput() {
 		cin >> cardNumber >> instanceId >> location >> cardType >> cost >> attack >> defense >> abilities >> myHealthChange >> opponentHealthChange >> cardDraw; cin.ignore();
 
 #ifdef OUTPUT_GAME_DATA
-		cerr << cardNumber << " " << instanceId << " " << location << " " << cardType << " " << cost << " " << attack << " " << defense << " " << abilities << " " << myHealthChange << " " << opponentHealthChange << " " << cardDraw << endl;
+		cerr << cardNumber << "\t" << instanceId << "\t" << location << "\t" << cardType << "\t" << cost << "\t" << attack << "\t" << defense << "\t" << abilities << "\t" << myHealthChange << "\t" << opponentHealthChange << "\t" << cardDraw << endl;
 #endif
 		const Card& card = createCard(
 			cardNumber,
