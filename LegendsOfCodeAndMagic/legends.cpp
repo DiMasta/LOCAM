@@ -336,11 +336,13 @@ Card::~Card() {
 int Card::getBitsAbilities() const {
 	int bits = 0;
 
-	int bitMask = 1;
+	int bitMask = 0b100'000;
 	for (int abilityIdx = 0; abilityIdx < ABILITIES_COUNT; ++abilityIdx) {
 		if (DASH != abilities[abilityIdx]) {
 			bits |= bitMask;
 		}
+
+		bitMask >>= 1;
 	}
 
 	return bits;
@@ -1393,7 +1395,7 @@ int8_t Board::setAttackCreaturesTargets() {
 
 	for (int8_t attCreatureIdx = 0; attCreatureIdx < playerCardsCount; ++attCreatureIdx) {
 		BoardCard& attCreature = playerBoard[attCreatureIdx];
-		if (attCreature.hasAbility(CardMasks::CAN_ATTACK)) {
+		if (attCreature.hasAbility(CardMasks::CAN_ATTACK) && attCreature.extractAttack() > 0) {
 			AttackTargets guardTargets;
 			AttackTargets targets;
 
@@ -2304,7 +2306,7 @@ string GameTree::getBestMoves() const {
 	Node* currentNode = gameTree.getNode(bestNode);
 	NodeId parentId = currentNode->getParentId();
 
-	cerr << "BEST NODE: " << bestNode << endl;
+	//cerr << "BEST NODE: " << bestNode << endl;
 
 	while (INVALID_NODE_ID != parentId) {
 		bestMoves = currentNode->getGameState()->getMove() + bestMoves;
