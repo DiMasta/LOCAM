@@ -2280,11 +2280,9 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 string GameTree::getBestMoves() const {
 	string bestMoves = EMPTY_STRING;
 	Node* currentNode = gameTree.getNode(bestNode);
-	cerr << bestNode << endl;
 	NodeId parentId = currentNode->getParentId();
 
 	while (INVALID_NODE_ID != parentId) {
-		cerr << parentId << currentNode->getGameState()->getMove() << endl;
 		bestMoves = currentNode->getGameState()->getMove() + bestMoves;
 		currentNode = gameTree.getNode(parentId);
 		parentId = currentNode->getParentId();
@@ -2578,11 +2576,9 @@ void Game::makeBattleTurn() {
 	string bestMoves = gameTree.getBestMoves();
 
 	if (EMPTY_STRING == bestMoves) {
-		cerr << "EMPTY_STRING" << endl;
 		cout << PASS << endl;
 	}
 	else {
-		cerr << "NON" << endl;
 		cout << bestMoves << endl;
 	}
 }
