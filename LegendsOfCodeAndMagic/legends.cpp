@@ -17,11 +17,10 @@
 
 using namespace std;
 
-//#define OUTPUT_GAME_DATA
-#define REDIRECT_CIN_FROM_FILE
-//#define REDIRECT_COUT_TO_FILE
-#define DEBUG_ONE_TURN
-#define DEBUG_BATTLE
+#define OUTPUT_GAME_DATA
+//#define REDIRECT_CIN_FROM_FILE
+//#define DEBUG_ONE_TURN
+//#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -722,6 +721,8 @@ public:
 
 	bool playableCard(StateSimulationType simType, uint8_t number) const;
 
+	void reset();
+
 private:
 	HandCard cards[MAX_CARDS_IN_HAND];
 	int8_t cardsCount;
@@ -763,6 +764,7 @@ void Hand::copy(const Hand& hand) {
 
 void Hand::addCard(const HandCard& card) {
 	cards[cardsCount++] = card;
+	//cerr << static_cast<int>(cardsCount) << endl;
 }
 
 bool Hand::uniqueCombination(
@@ -827,6 +829,10 @@ bool Hand::playableCard(StateSimulationType simType, uint8_t number) const {
 		ALL_CARDS_HOLDER.allGameCards[number].getType() != CardType::CREATURE;
 
 	return playCreature || playItem;
+}
+
+inline void Hand::reset() {
+	cardsCount = 0;
 }
 
 void Hand::removeCard(int8_t cardId) {
@@ -1100,6 +1106,8 @@ public:
 	int8_t setAttackCreaturesTargets();
 
 	int getBoardSum(Side side, BoardSum sumType) const;
+
+	void reset();
 
 private:
 	BoardCard playerBoard[MAX_BOARD_CREATURES];
@@ -1436,6 +1444,11 @@ int Board::getBoardSum(Side side, BoardSum sumType) const {
 	}
 
 	return sum;
+}
+
+void Board::reset() {
+	playerCardsCount = 0;
+	opponentCardsCount = 0;
 }
 
 class Player {
@@ -2121,6 +2134,8 @@ public:
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
 	void createPlayedCardsChildren(NodeId parentId, NodesVector& children);
+	void reset();
+
 	string getBestMoves() const;
 
 private:
@@ -2208,7 +2223,6 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 					for (uint8_t target : itemTargets) {
 						// TODO: first create node with parent state, then simulate it, to reduce one copy
 						GameState childState = *parentState;
-						childState.setMove(EMPTY_STRING);
 						childState.playItem(card, target);
 						childState.setHandCombination(handCombination);
 						childState.setPlayedCardInHandCombination(cardIdx);
@@ -2231,6 +2245,7 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
 			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 			childState->setSimType(StateSimulationType::PERFORM_ATTACKS);
+			childState->setMove(EMPTY_STRING);
 			children.push_back(childNodeId);
 		}
 	}
@@ -2277,10 +2292,19 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 	}
 }
 
+void GameTree::reset() {
+	gameTree.clear();
+
+	bestNode = INVALID_NODE_ID;
+	bestEvaluation = INT_MIN;
+}
+
 string GameTree::getBestMoves() const {
 	string bestMoves = EMPTY_STRING;
 	Node* currentNode = gameTree.getNode(bestNode);
 	NodeId parentId = currentNode->getParentId();
+
+	cerr << "BEST NODE: " << bestNode << endl;
 
 	while (INVALID_NODE_ID != parentId) {
 		bestMoves = currentNode->getGameState()->getMove() + bestMoves;
@@ -2479,9 +2503,17 @@ void Game::getTurnInput() {
 
 		addCard(card);
 	}
+
+	//cerr << "HAND CARDS COUNT: " << static_cast<int>(hand.getCardsCount()) << endl;
+	//
+	//for (int8_t i = 0; i < 6; ++i) {
+	//	cerr << "CARD " << static_cast<int>(i) << " " << static_cast<int>(hand.getCard(i).extractId()) << endl;
+	//}
 }
 
 void Game::turnBegin() {
+	hand.reset();
+	board.reset();
 }
 
 void Game::makeTurn() {
@@ -2543,20 +2575,31 @@ void Game::addBattleCard(const Card& card) {
 
 	switch (location) {
 		case CardLocation::PLAYER_HAND: {
+			//cerr << "Hand card number: " << card.getNumber() << "\tHand card Id: " << card.getId() << endl;
+
 			HandCard handCard(card.getNumber(), card.getId());
 			hand.addCard(handCard);
+
+			//cerr << "Hand card number: " << static_cast<int>(handCard.extractNumber()) << "\tHand card Id: " << static_cast<int>(handCard.extractId()) << endl;
+
 			break;
 		}
 		case CardLocation::PLAYER_BOARD: {
 			BoardCard boardCard(card.getId(), card.getAtt(), card.getDef(), card.getBitsAbilities());
 			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::PLAYER);
+
+			//cerr << "Player board card id: " << static_cast<int>(boardCard.extractId()) << endl;
+
 			break;
 		}
 		case CardLocation::OPPONENT_BOARD: {
 			BoardCard boardCard(card.getId(), card.getAtt(), card.getDef(), card.getBitsAbilities());
 			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::OPPONENT);
+
+			//cerr << "Opponent board card id: " << static_cast<int>(boardCard.extractId()) << endl;
+
 			break;
 		}
 		default: {
@@ -2597,7 +2640,14 @@ void Game::initGameTree() {
 		EMPTY_STRING
 	);
 
+	//cerr << "HAND CARDS COUNT: " << static_cast<int>(hand.getCardsCount()) << endl;
+	//
+	//for (int8_t i = 0; i < 7; ++i) {
+	//	cerr << "CARD " << i << static_cast<int>(hand.getCard(i).extractId()) << endl;
+	//}
+
 	gameTree.setTurnState(turnState);
+	gameTree.reset();
 }
 
 Card Game::createCard(
