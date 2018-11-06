@@ -1586,12 +1586,13 @@ public:
 	void playItem(const Card& item, uint8_t target);
 	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
 	void setItemTargets();
-	void setItemTargets(uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
+	void setItemTargets(const Card& card, uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
 	void checkForItemsToPlay();
 	void setPlayerHealth(const int8_t health);
 
 	bool checkIfPlayerDiesNextTurn() const;
+	bool validTarget(const Card& card, const BoardCard& boardCard) const;
 	
 	void performAttack(
 		const int8_t attCreatureId,
@@ -1769,18 +1770,18 @@ void GameState::setItemTargets() {
 
 		switch (type) {
 			case CardType::RED_ITEM: {
-				setItemTargets(id, board.getOpponentBoard());
+				setItemTargets(card, id, board.getOpponentBoard());
 				break;
 			}
 			case CardType::GREEN_ITEM: {
-				setItemTargets(id, board.getPlayerBoard());
+				setItemTargets(card, id, board.getPlayerBoard());
 				break;
 			}
 			case CardType::BLUE_ITEM: {
 				// TODO: player targets and no creture!!!
 				// if player target item
-				setItemTargets(id, board.getOpponentBoard());
-				setItemTargets(id, board.getPlayerBoard());
+				setItemTargets(card, id, board.getOpponentBoard());
+				setItemTargets(card, id, board.getPlayerBoard());
 				break;
 			}
 			default: {
@@ -1790,13 +1791,13 @@ void GameState::setItemTargets() {
 	}
 }
 
-void GameState::setItemTargets(uint8_t cardId, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
+void GameState::setItemTargets(const Card& card, uint8_t cardId, const BoardCard(&board)[MAX_BOARD_CREATURES]) {
 	for (const BoardCard& boardCard : board) {
 		const uint8_t id = boardCard.extractId();
 
 		handCombination.itemsTargets[cardId];
 
-		if (0 == id) {
+		if (0 == id || !validTarget(card, boardCard)) {
 			break;
 		}
 
@@ -1837,6 +1838,19 @@ bool GameState::checkIfPlayerDiesNextTurn() const {
 	const int opponentAttacks = board.getBoardSum(Side::OPPONENT, BoardSum::ATT);
 
 	return opponentAttacks >= static_cast<int>(player.getHealth());
+}
+
+bool GameState::validTarget(const Card& item, const BoardCard& boardCard) const {
+	bool hasValidTargets = true;
+
+	bool notDemaging = 0 == item.getAtt() && 0 == item.getDef() && 0 == item.getMyHealthChange() && 0 == item.getOpponentHealthChange();
+
+	int itemAbilities = item.getBitsAbilities();
+	int boardCardAbilities = static_cast<int>(boardCard.extractAbilitiesBits());
+
+
+
+	return hasValidTargets;
 }
  
 void GameState::performAttack(
