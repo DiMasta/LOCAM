@@ -17,10 +17,10 @@
 
 using namespace std;
 
-#define OUTPUT_GAME_DATA
-//#define REDIRECT_CIN_FROM_FILE
-//#define DEBUG_ONE_TURN
-//#define DEBUG_BATTLE
+//#define OUTPUT_GAME_DATA
+#define REDIRECT_CIN_FROM_FILE
+#define DEBUG_ONE_TURN
+#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -890,9 +890,6 @@ public:
 	inline void setAttack(int attack);
 	inline void setDefense(int defense);
 
-	/// Removes creature from the board
-	// void destroy();
-
 private:
 	int card;
 	AttackTargets targets;
@@ -1609,7 +1606,6 @@ public:
 
 private:
 	StateSimulationType simType;
-	// TODO: make state flags, containing active player and simType
 	int8_t opponentHealth;
 	Player player;
 	Hand playerHand;
@@ -1904,7 +1900,6 @@ public:
 
 	Node(
 		NodeId nodeId,
-		int nodeDepth,
 		NodeId parentId,
 		const GameState& gameState
 	);
@@ -1913,10 +1908,6 @@ public:
 
 	NodeId getId() const {
 		return id;
-	}
-
-	int getDepth() const {
-		return depth;
 	}
 
 	NodeId getParentId() const {
@@ -1928,13 +1919,11 @@ public:
 	}
 
 	void setId(NodeId id) { this->id = id; }
-	void setDepth(int depth) { this->depth = depth; }
 	void setParentId(NodeId parentId) { this->parentId = parentId; }
 	void setGameState(const GameState& gameState) { this->gameState = gameState; }
 
 private:
 	NodeId id;
-	int depth; ///< Based on the depth, node's children type could be decided
 	NodeId parentId;
 
 	GameState gameState;
@@ -1942,7 +1931,6 @@ private:
 
 Node::Node() :
 	id(INVALID_ID),
-	depth(INVALID_NODE_DEPTH),
 	parentId(INVALID_ID),
 	gameState()
 {
@@ -1951,12 +1939,10 @@ Node::Node() :
 
 Node::Node(
 	NodeId id,
-	int depth,
 	NodeId parentId,
 	const GameState& gameState
 ) :
 	id(id),
-	depth(depth),
 	parentId(parentId),
 	gameState(gameState)
 {
@@ -2006,7 +1992,6 @@ public:
 	void clear();
 	bool nodeCreated(NodeId nodeId) const;
 	void deleteAllNodes();
-	int getMaxNodeDepth() const;
 	bool edgeExists(NodeId parent, NodeId child) const;
 	vector<NodeId> backtrack(NodeId from, NodeId to) const;
 
@@ -2046,19 +2031,6 @@ void Graph::deleteAllNodes() {
 	nodesCount = 0;
 }
 
-int Graph::getMaxNodeDepth() const {
-	int maxNodeDepth = INVALID_NODE_DEPTH;
-
-	for (IdNodeMap::const_iterator nodeIt = idNodeMap.begin(); nodeIt != idNodeMap.end(); ++nodeIt) {
-		int nodeDepth = nodeIt->second->getDepth();
-		if (nodeDepth > maxNodeDepth) {
-			maxNodeDepth = nodeDepth;
-		}
-	}
-
-	return maxNodeDepth;
-}
-
 bool Graph::edgeExists(NodeId parent, NodeId child) const {
 	bool res = false;
 
@@ -2096,12 +2068,7 @@ NodeId Graph::createNode(
 	NodeId nodeId = nodesCount;
 
 	if (!nodeCreated(nodeId)) {
-		int nodeDepth = 0;
-		if (parentId != INVALID_NODE_ID) {
-			nodeDepth = 1 + idNodeMap[parentId]->getDepth();
-		}
-
-		Node* node = new Node(nodeId, nodeDepth, parentId, gameState);
+		Node* node = new Node(nodeId, parentId, gameState);
 		idNodeMap[nodeId] = node;
 		graph[nodeId];
 
@@ -2563,12 +2530,8 @@ void Game::addBattleCard(const Card& card) {
 
 	switch (location) {
 		case CardLocation::PLAYER_HAND: {
-			//cerr << "Hand card number: " << card.getNumber() << "\tHand card Id: " << card.getId() << endl;
-
 			HandCard handCard(card.getNumber(), card.getId());
 			hand.addCard(handCard);
-
-			//cerr << "Hand card number: " << static_cast<int>(handCard.extractNumber()) << "\tHand card Id: " << static_cast<int>(handCard.extractId()) << endl;
 
 			break;
 		}
@@ -2577,17 +2540,13 @@ void Game::addBattleCard(const Card& card) {
 			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::PLAYER);
 
-			//cerr << "Player board card id: " << static_cast<int>(boardCard.extractId()) << endl;
-
 			break;
 		}
 		case CardLocation::OPPONENT_BOARD: {
 			BoardCard boardCard(card.getId(), card.getAtt(), card.getDef(), card.getBitsAbilities());
 			boardCard.setAbility(CardMasks::CAN_ATTACK); // Creatures on board can attack
 			board.addCard(boardCard, Side::OPPONENT);
-
-			//cerr << "Opponent board card id: " << static_cast<int>(boardCard.extractId()) << endl;
-
+			
 			break;
 		}
 		default: {
