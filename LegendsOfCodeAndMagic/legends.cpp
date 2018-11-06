@@ -113,8 +113,8 @@ namespace CardMasks {
 	static constexpr int HAND_CARD_ID_OFFSET = 8;
 	static constexpr int HAND_CARD_COMB_OFFSET = 8;
 
-	static constexpr int NUMBER			= 0b0000'0000'0000'0000'0000'0000'1111'1111;
-	static constexpr int HAND_CARD_ID	= 0b0000'0000'0000'0000'0011'1111'0000'0000;
+	static constexpr long long NUMBER			= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'1111'1111;
+	static constexpr long long HAND_CARD_ID		= 0b0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0011'1111'0000'0000;
 
 	// Boardcard masks
 	static constexpr int ATTACK_OFFSET = 0;
@@ -2505,12 +2505,6 @@ void Game::getTurnInput() {
 
 		addCard(card);
 	}
-
-	//cerr << "HAND CARDS COUNT: " << static_cast<int>(hand.getCardsCount()) << endl;
-	//
-	//for (int8_t i = 0; i < 6; ++i) {
-	//	cerr << "CARD " << static_cast<int>(i) << " " << static_cast<int>(hand.getCard(i).extractId()) << endl;
-	//}
 }
 
 void Game::turnBegin() {
