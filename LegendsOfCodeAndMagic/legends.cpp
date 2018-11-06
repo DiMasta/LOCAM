@@ -2715,3 +2715,8 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
+
+//shufflePlayer0Seed = 7357325505330546760
+//seed = -8778666055931850800
+//draftChoicesSeed = -3000373932237871214
+//shufflePlayer1Seed = 8230258112429480157
