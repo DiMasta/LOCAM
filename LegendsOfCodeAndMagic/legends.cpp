@@ -17,10 +17,10 @@
 
 using namespace std;
 
-//#define OUTPUT_GAME_DATA
-#define REDIRECT_CIN_FROM_FILE
-#define DEBUG_ONE_TURN
-#define DEBUG_BATTLE
+#define OUTPUT_GAME_DATA
+//#define REDIRECT_CIN_FROM_FILE
+//#define DEBUG_ONE_TURN
+//#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -1841,16 +1841,14 @@ bool GameState::checkIfPlayerDiesNextTurn() const {
 }
 
 bool GameState::validTarget(const Card& item, const BoardCard& boardCard) const {
-	bool hasValidTargets = true;
-
 	bool notDemaging = 0 == item.getAtt() && 0 == item.getDef() && 0 == item.getMyHealthChange() && 0 == item.getOpponentHealthChange();
 
 	int itemAbilities = item.getBitsAbilities();
 	int boardCardAbilities = static_cast<int>(boardCard.extractAbilitiesBits());
 
+	bool changesAbilities = itemAbilities & boardCardAbilities;
 
-
-	return hasValidTargets;
+	return !notDemaging || changesAbilities;
 }
  
 void GameState::performAttack(
