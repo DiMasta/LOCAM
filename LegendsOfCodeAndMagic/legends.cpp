@@ -2137,7 +2137,7 @@ public:
 
 	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
-	void createPlayedCardsChildren(NodeId parentId, NodesVector& children);
+	void createPlayedCardsChildren(NodeId parentId, NodesQueue& children);
 	void reset();
 
 	string getBestMoves() const;
@@ -2175,16 +2175,11 @@ void GameTree::build() {
 		const NodeId parentId = nodesQueue.front();
 		nodesQueue.pop();
 
-		// TODO: if no reordering will be performed, chidren may be added in "createChildren"
-		NodesVector children;
-		createPlayedCardsChildren(parentId, children);
-		for (size_t childIdx = 0; childIdx < children.size(); ++childIdx) {
-			nodesQueue.push(children[childIdx]);
-		}
+		createPlayedCardsChildren(parentId, nodesQueue);
 	}
 }
 
-void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children) {
+void GameTree::createPlayedCardsChildren(NodeId parentId, NodesQueue& children) {
 	Node* parent = gameTree.getNode(parentId);
 	GameState* parentState = parent->getGameState();
 
@@ -2194,17 +2189,16 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 		parentState->getAllHandCombinations(cardCombinations);
 
 		for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
-			// TODO: first create node with parent state, then simulate it, to reduce one copy
-			GameState childState = *parentState;
-			childState.setMove(EMPTY_STRING);
-			childState.setHandCombination(cardCombinations[combIdx]);
-			childState.playCards();
-			childState.setItemTargets();
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 
-			childState.setSimType(StateSimulationType::PLAY_ITEMS);
+			childState->setMove(EMPTY_STRING);
+			childState->setHandCombination(cardCombinations[combIdx]);
+			childState->playCards();
+			childState->setItemTargets();
+			childState->setSimType(StateSimulationType::PLAY_ITEMS);
 
-			NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
-			children.push_back(childNodeId);
+			children.push(childNodeId);
 		}
 	}
 	else if (StateSimulationType::PLAY_ITEMS == parentState->getSimType()) {
@@ -2225,16 +2219,16 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 					const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
 					// each target, for item, makes new state
 					for (uint8_t target : itemTargets) {
-						// TODO: first create node with parent state, then simulate it, to reduce one copy
-						GameState childState = *parentState;
-						childState.playItem(card, target);
-						childState.setHandCombination(handCombination);
-						childState.setPlayedCardInHandCombination(cardIdx);
-						childState.checkForItemsToPlay();
-						childState.setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
+						NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+						GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 
-						NodeId childNodeId = gameTree.createNode(parent->getId(), childState);
-						children.push_back(childNodeId);
+						childState->playItem(card, target);
+						childState->setHandCombination(handCombination);
+						childState->setPlayedCardInHandCombination(cardIdx);
+						childState->checkForItemsToPlay();
+						childState->setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
+
+						children.push(childNodeId);
 
 						itemPlayed = true;
 					}
@@ -2248,7 +2242,7 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 			childState->setSimType(StateSimulationType::PERFORM_ATTACKS);
 			childState->setMove(EMPTY_STRING);
-			children.push_back(childNodeId);
+			children.push(childNodeId);
 		}
 	}
 	else if (StateSimulationType::PERFORM_ATTACKS == parentState->getSimType()) {
@@ -2286,7 +2280,7 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesVector& children)
 						childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
 						childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId) + END_EXPRESSION);
 
-						children.push_back(childNodeId);
+						children.push(childNodeId);
 					}
 				}
 			}
@@ -2305,8 +2299,6 @@ string GameTree::getBestMoves() const {
 	string bestMoves = EMPTY_STRING;
 	Node* currentNode = gameTree.getNode(bestNode);
 	NodeId parentId = currentNode->getParentId();
-
-	//cerr << "BEST NODE: " << bestNode << endl;
 
 	while (INVALID_NODE_ID != parentId) {
 		bestMoves = currentNode->getGameState()->getMove() + bestMoves;
