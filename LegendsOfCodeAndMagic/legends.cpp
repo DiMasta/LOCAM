@@ -17,10 +17,10 @@
 
 using namespace std;
 
-#define OUTPUT_GAME_DATA
-//#define REDIRECT_CIN_FROM_FILE
-//#define DEBUG_ONE_TURN
-//#define DEBUG_BATTLE
+//#define OUTPUT_GAME_DATA
+#define REDIRECT_CIN_FROM_FILE
+#define DEBUG_ONE_TURN
+#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -103,6 +103,7 @@ enum class StateSimulationType : int8_t {
 	PERFORM_ATTACKS,
 	FIRST_PERFORM_ATTACKS, /// If the hand combination is not changing the board state, start with attcks
 	SUMMON_CREATURES,
+	END,
 	//EVALUATE,
 };
 
@@ -801,12 +802,12 @@ void Hand::getAllCombinations(
 
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
-				const HandCard* card = &cards[cardIdx];
-				long long number = static_cast<long long>(card->extractNumber());
-				long long id = static_cast<long long>(card->extractId());
+				const HandCard& handCard = cards[cardIdx];
+				long long number = static_cast<long long>(handCard.extractNumber());
+				long long id = static_cast<long long>(handCard.extractId());
+				const Card& card = ALL_CARDS_HOLDER.allGameCards[number];
 
-				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
-
+				combinationCost += card.getCost();
 				combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 				combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 			}
@@ -1089,6 +1090,7 @@ public:
 	);
 
 	int8_t setAttackCreaturesTargets();
+	int8_t attackingCreaturesCount(Side side) const;
 
 	int getBoardSum(Side side, BoardSum sumType) const;
 
@@ -1407,6 +1409,25 @@ int8_t Board::setAttackCreaturesTargets() {
 	return allTargetsCount;
 }
 
+int8_t Board::attackingCreaturesCount(Side side) const {
+	int8_t count = 0;
+
+	const BoardCard* boardCardsArr = playerBoard;
+
+	if (Side::OPPONENT == side) {
+		boardCardsArr = opponentBoard;
+	}
+
+	for (int8_t attCreatureIdx = 0; attCreatureIdx < playerCardsCount; ++attCreatureIdx) {
+		const BoardCard& attCreature = boardCardsArr[attCreatureIdx];
+		if (attCreature.hasAbility(CardMasks::CAN_ATTACK) && attCreature.extractAttack() > 0) {
+			++count;
+		}
+	}
+
+	return count;
+}
+
 int Board::getBoardSum(Side side, BoardSum sumType) const {
 	int sum = 0;
 
@@ -1631,8 +1652,7 @@ GameState::GameState(
 	player(player),
 	playerHand(playerHand),
 	board(board),
-	handCombination(handCombination),
-	move(move)
+	handCombination(handCombination)
 {
 }
 
@@ -1642,8 +1662,7 @@ GameState::GameState(const GameState& gameState) :
 	player(gameState.player),
 	playerHand(gameState.playerHand),
 	board(gameState.board),
-	handCombination(gameState.handCombination),
-	move(gameState.move)
+	handCombination(gameState.handCombination)
 {
 }
 
@@ -1669,14 +1688,13 @@ void GameState::getAllHandCombinations(HandCombinations& cardCombination) const 
 }
 
 void GameState::decideSimulationType() {
-	simType = StateSimulationType::INVALID;
-
 	bool itemGivingCharge = false;
 	bool nonChargeCreaturesToSummon = false;
 	bool chargeCreaturesToSummon = false;
 	bool itemsToPlay = false;
-	bool attacksToPerform = board.getPlayerCardsCount() > 0;;
+	bool attacksToPerform = board.attackingCreaturesCount(Side::PLAYER) > 0;;
 
+	// TODO: perform this for only for the Sim types that make sense
 	for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
 		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
 
@@ -1709,8 +1727,16 @@ void GameState::decideSimulationType() {
 	else if (!itemGivingCharge && chargeCreaturesToSummon) {
 		simType = StateSimulationType::SUMMON_CHARGE_CREATURES;
 	}
-	else if (StateSimulationType::FIRST_PERFORM_ATTACKS == simType && !attacksToPerform) {
-		simType = StateSimulationType::SUMMON_CREATURES;
+	else if (StateSimulationType::FIRST_PERFORM_ATTACKS == simType) {
+		// If thare are no attacks to perform, summon creatures, otherwise stay on FIRST_PERFORM_ATTACKS
+		if (!attacksToPerform) {
+			simType = StateSimulationType::SUMMON_CREATURES;
+		}
+	}
+	else if (StateSimulationType::SUMMON_CREATURES == simType) {
+		if (!nonChargeCreaturesToSummon) {
+			simType = StateSimulationType::END;
+		}
 	}
 	else if (itemsToPlay) {
 		simType = StateSimulationType::PLAY_ITEMS;
@@ -1720,6 +1746,9 @@ void GameState::decideSimulationType() {
 	}
 	else if (nonChargeCreaturesToSummon) {
 		simType = StateSimulationType::SUMMON_CREATURES;
+	}
+	else {
+		simType = StateSimulationType::INVALID;
 	}
 }
 
@@ -1761,7 +1790,7 @@ void GameState::playCreature(const Card& creatureCard, uint8_t cardId) {
 		player.setAdditionalCards(player.getAdditionalCards() + creatureCard.getCardDraw());
 		opponentHealth += creatureCard.getOpponentHealthChange();
 
-		move += SUMMON + SPACE + to_string(cardId) + END_EXPRESSION + SPACE;
+		move = SUMMON + SPACE + to_string(cardId) + END_EXPRESSION + SPACE;
 	}
 }
 
@@ -2308,7 +2337,8 @@ void GameTree::createSummonChargeChildren(Node* parent, GameState* parentState, 
 }
 
 void GameTree::createSummonCreaturesChildren(Node* parent, GameState* parentState, NodesQueue& children) {
-	if (StateSimulationType::FIRST_PERFORM_ATTACKS == parentState->getSimType()) {
+	GameState* parentParent = gameTree.getNode(parent->getParentId())->getGameState();
+	if (StateSimulationType::FIRST_PERFORM_ATTACKS == parentParent->getSimType()) {
 		createSummonCreaturesFromHandCombChildren(parent, parentState,children);
 	}
 	else {
@@ -2363,8 +2393,9 @@ void GameTree::createPlayItemsChildren(Node* parent, GameState* parentState, Nod
 }
 
 void GameTree::createPerformAttacksChildren(Node* parent, GameState* parentState, NodesQueue& children) {
-	const Board& board = parentState->getBoard();
-	
+	parentState->setAttackCreaturesTargets();
+	const Board& board = parentState->getBoard(); // TODO: remove copying
+
 	// for all attack creatures and all targets make states 
 	for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
 		const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
@@ -2411,6 +2442,7 @@ void GameTree::createSummonCreaturesChildren(const HandCombination& handCombinat
 			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
 
 			childState->playCreature(card, cardId);
+			childState->setHandCombination(handCombination);
 			childState->setPlayedCardInHandCombination(cardIdx);
 			childState->decideSimulationType();
 
@@ -2423,18 +2455,6 @@ void GameTree::createSummonCreaturesChildren(const HandCombination& handCombinat
 void GameTree::createPlayedCardsChildren(NodeId parentId, NodesQueue& children) {
 	Node* parent = gameTree.getNode(parentId);
 	GameState* parentState = parent->getGameState();
-
-	// Create card combinations
-	//		If there is card combination with charge or the item that gives charge, start with them
-	//			If there are charge monsters, create their nodes
-	//			If the item that gives charge is in the combination, first simulate summoning
-	// If there are no card combinations, perform attacks
-	// If there are no charge cards, play items
-	// Play only the items that chage the board state
-	// If there are no items, perform attacks
-	// Attacks with respect to clear the opponent board
-	// If there are no attacks to perform, summon creatures
-	// Evaluate each state
 
 	switch (parentState->getSimType()) {
 		case StateSimulationType::INVALID: {
@@ -2464,6 +2484,9 @@ void GameTree::createPlayedCardsChildren(NodeId parentId, NodesQueue& children) 
 		case StateSimulationType::SUMMON_CREATURES: {
 			createSummonCreaturesChildren(parent, parentState, children);
 			break;
+		}
+		case StateSimulationType::END: {
+			break; // End of simulation reached
 		}
 		default: {
 			evaluateState(*parentState, parentId);
