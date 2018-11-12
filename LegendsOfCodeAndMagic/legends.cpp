@@ -17,10 +17,10 @@
 
 using namespace std;
 
-#define OUTPUT_GAME_DATA
-//#define REDIRECT_CIN_FROM_FILE
-//#define DEBUG_ONE_TURN
-//#define DEBUG_BATTLE
+//#define OUTPUT_GAME_DATA
+#define REDIRECT_CIN_FROM_FILE
+#define DEBUG_ONE_TURN
+#define DEBUG_BATTLE
 
 static const string INPUT_FILE_NAME = "input.txt";
 static const string OUTPUT_FILE_NAME = "output.txt";
@@ -41,6 +41,7 @@ static constexpr int ALL_GAME_CARDS_COUNT = 160;
 static constexpr int MAX_CARDS_IN_HAND = 8;
 static constexpr int DEFAULT_CARD_TEMPLATE = 0;
 static constexpr int ABILITIES_COUNT = 6;
+static constexpr int ITEM_GIVING_CHARGE = 140;
 
 static constexpr int8_t PLAYER_TARGET = -1;
 
@@ -56,6 +57,7 @@ static const string SPACE = " ";
 static const string END_EXPRESSION = "; ";
 
 static constexpr char GUARD = 'G';
+static constexpr char CHARGE = 'C';
 static constexpr char WARD = 'W';
 static constexpr char LETHAL = 'L';
 static constexpr char DASH = '-';
@@ -95,10 +97,14 @@ enum class BoardSum : int8_t {
 
 enum class StateSimulationType : int8_t {
 	INVALID = -1,
-	PLAY_CREATURES,
+	SUMMON_CHARGE_CREATURES,
+	SUMMON_CREATURES_FOR_CHARGE, /// If the item that grants charge is in the combination
 	PLAY_ITEMS,
 	PERFORM_ATTACKS,
-	EVALUATE,
+	FIRST_PERFORM_ATTACKS, /// If the hand combination is not changing the board state, start with attcks
+	SUMMON_CREATURES,
+	END,
+	//EVALUATE,
 };
 
 enum class HandCombProperty : int8_t {
@@ -721,8 +727,6 @@ public:
 		const HandCombination& combination
 	) const;
 
-	bool playableCard(StateSimulationType simType, uint8_t number) const;
-
 	void reset();
 
 private:
@@ -798,12 +802,12 @@ void Hand::getAllCombinations(
 
 		for (int8_t cardIdx = 0; cardIdx < cardsCount; ++cardIdx) {
 			if (comb & (1 << cardIdx)) {
-				const HandCard* card = &cards[cardIdx];
-				long long number = static_cast<long long>(card->extractNumber());
-				long long id = static_cast<long long>(card->extractId());
+				const HandCard& handCard = cards[cardIdx];
+				long long number = static_cast<long long>(handCard.extractNumber());
+				long long id = static_cast<long long>(handCard.extractId());
+				const Card& card = ALL_CARDS_HOLDER.allGameCards[number];
 
-				combinationCost += ALL_CARDS_HOLDER.allGameCards[number].getCost();
-
+				combinationCost += card.getCost();
 				combination.cardsNumbers |= number << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 				combination.cardsIds |= id << (CardMasks::HAND_CARD_COMB_OFFSET * cardIdx);
 			}
@@ -815,18 +819,6 @@ void Hand::getAllCombinations(
 			handCombinations.push_back(combination);
 		}
 	}
-}
-
-bool Hand::playableCard(StateSimulationType simType, uint8_t number) const {
-	bool playCreature = 
-		StateSimulationType::PLAY_CREATURES == simType &&
-		ALL_CARDS_HOLDER.allGameCards[number].getType() == CardType::CREATURE;
-
-	bool playItem = 
-		StateSimulationType::PLAY_ITEMS == simType &&
-		ALL_CARDS_HOLDER.allGameCards[number].getType() != CardType::CREATURE;
-
-	return playCreature || playItem;
 }
 
 inline void Hand::reset() {
@@ -1098,6 +1090,7 @@ public:
 	);
 
 	int8_t setAttackCreaturesTargets();
+	int8_t attackingCreaturesCount(Side side) const;
 
 	int getBoardSum(Side side, BoardSum sumType) const;
 
@@ -1416,6 +1409,25 @@ int8_t Board::setAttackCreaturesTargets() {
 	return allTargetsCount;
 }
 
+int8_t Board::attackingCreaturesCount(Side side) const {
+	int8_t count = 0;
+
+	const BoardCard* boardCardsArr = playerBoard;
+
+	if (Side::OPPONENT == side) {
+		boardCardsArr = opponentBoard;
+	}
+
+	for (int8_t attCreatureIdx = 0; attCreatureIdx < playerCardsCount; ++attCreatureIdx) {
+		const BoardCard& attCreature = boardCardsArr[attCreatureIdx];
+		if (attCreature.hasAbility(CardMasks::CAN_ATTACK) && attCreature.extractAttack() > 0) {
+			++count;
+		}
+	}
+
+	return count;
+}
+
 int Board::getBoardSum(Side side, BoardSum sumType) const {
 	int sum = 0;
 
@@ -1581,10 +1593,10 @@ public:
 	}
 
 	void getAllHandCombinations(HandCombinations& cardCombination) const;
+	void decideSimulationType();
 	void playCards();
-	void playCreature(Card* creatureCard, uint8_t cardId);
+	void playCreature(const Card& creatureCard, uint8_t cardId);
 	void playItem(const Card& item, uint8_t target);
-	void setSimTypeBasedOnParent(StateSimulationType parentSimType);
 	void setItemTargets();
 	void setItemTargets(const Card& card, uint8_t cardId, const BoardCard (&board)[MAX_BOARD_CREATURES]);
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
@@ -1593,6 +1605,7 @@ public:
 
 	bool checkIfPlayerDiesNextTurn() const;
 	bool validTarget(const Card& card, const BoardCard& boardCard) const;
+	bool handCombinationChangesBoard(const HandCombination& handCombination) const;
 	
 	void performAttack(
 		const int8_t attCreatureId,
@@ -1639,8 +1652,7 @@ GameState::GameState(
 	player(player),
 	playerHand(playerHand),
 	board(board),
-	handCombination(handCombination),
-	move(move)
+	handCombination(handCombination)
 {
 }
 
@@ -1650,8 +1662,7 @@ GameState::GameState(const GameState& gameState) :
 	player(gameState.player),
 	playerHand(gameState.playerHand),
 	board(gameState.board),
-	handCombination(gameState.handCombination),
-	move(gameState.move)
+	handCombination(gameState.handCombination)
 {
 }
 
@@ -1672,10 +1683,73 @@ GameState& GameState::operator=(const GameState& gameState) {
 	return *this;
 }
 
-void GameState::getAllHandCombinations(
-	HandCombinations& cardCombination
-) const {
+void GameState::getAllHandCombinations(HandCombinations& cardCombination) const {
 	playerHand.getAllCombinations(player.getMana(), simType, cardCombination);
+}
+
+void GameState::decideSimulationType() {
+	bool itemGivingCharge = false;
+	bool nonChargeCreaturesToSummon = false;
+	bool chargeCreaturesToSummon = false;
+	bool itemsToPlay = false;
+	bool attacksToPerform = board.attackingCreaturesCount(Side::PLAYER) > 0;;
+
+	// TODO: perform this for only for the Sim types that make sense
+	for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+
+		if (0 == cardNumber || handCombination.cardPlayed(cardIdx)) {
+			continue;
+		}
+
+		const Card& cardToPlay = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+
+		if (ITEM_GIVING_CHARGE == cardNumber) {
+			itemGivingCharge = true;
+		}
+
+		if (CardType::CREATURE == cardToPlay.getType()) {
+			if (CHARGE == cardToPlay.getAbilities()[1]) {
+				chargeCreaturesToSummon = true;
+			}
+			else {
+				nonChargeCreaturesToSummon = true;
+			}
+		}
+		else {
+			itemsToPlay = true;
+		}
+	}
+
+	if (itemGivingCharge && nonChargeCreaturesToSummon) {
+		simType = StateSimulationType::SUMMON_CREATURES_FOR_CHARGE;
+	}
+	else if (!itemGivingCharge && chargeCreaturesToSummon) {
+		simType = StateSimulationType::SUMMON_CHARGE_CREATURES;
+	}
+	else if (StateSimulationType::FIRST_PERFORM_ATTACKS == simType) {
+		// If thare are no attacks to perform, summon creatures, otherwise stay on FIRST_PERFORM_ATTACKS
+		if (!attacksToPerform) {
+			simType = StateSimulationType::SUMMON_CREATURES;
+		}
+	}
+	else if (StateSimulationType::SUMMON_CREATURES == simType) {
+		if (!nonChargeCreaturesToSummon) {
+			simType = StateSimulationType::END;
+		}
+	}
+	else if (itemsToPlay) {
+		simType = StateSimulationType::PLAY_ITEMS;
+	}
+	else if (attacksToPerform) {
+		simType = StateSimulationType::PERFORM_ATTACKS;
+	}
+	else if (nonChargeCreaturesToSummon) {
+		simType = StateSimulationType::SUMMON_CREATURES;
+	}
+	else {
+		simType = StateSimulationType::INVALID;
+	}
 }
 
 void GameState::playCards() {
@@ -1687,11 +1761,10 @@ void GameState::playCards() {
 			continue;
 		}
 
-		// TODO: use const reference
-		Card* cardToPlay = &ALL_CARDS_HOLDER.allGameCards[cardNumber];
+		const Card& cardToPlay = ALL_CARDS_HOLDER.allGameCards[cardNumber];
 
-		if (StateSimulationType::PLAY_CREATURES == simType &&
-			CardType::CREATURE == cardToPlay->getType()
+		if (StateSimulationType::SUMMON_CREATURES == simType &&
+			CardType::CREATURE == cardToPlay.getType()
 		) {
 			playCreature(cardToPlay, cardId);
 			handCombination.markPlayedCard(cardIdx);
@@ -1699,25 +1772,25 @@ void GameState::playCards() {
 	}
 }
 
-void GameState::playCreature(Card* creatureCard, uint8_t cardId) {
+void GameState::playCreature(const Card& creatureCard, uint8_t cardId) {
 	if (board.getPlayerCardsCount() < MAX_BOARD_CREATURES) {
 		BoardCard boardCard(
 			cardId, // game id is not stored in global array cards
-			creatureCard->getAtt(),
-			creatureCard->getDef(),
-			creatureCard->getBitsAbilities()
+			creatureCard.getAtt(),
+			creatureCard.getDef(),
+			creatureCard.getBitsAbilities()
 		);
 
 		board.addCard(boardCard, Side::PLAYER);
-		player.setMana(player.getMana() - creatureCard->getCost());
+		player.setMana(player.getMana() - creatureCard.getCost());
 		playerHand.removeCard(cardId);
 
 		// apply creature effect
-		player.setHealth(player.getHealth() + creatureCard->getMyHealthChange());
-		player.setAdditionalCards(player.getAdditionalCards() + creatureCard->getCardDraw());
-		opponentHealth += creatureCard->getOpponentHealthChange();
+		player.setHealth(player.getHealth() + creatureCard.getMyHealthChange());
+		player.setAdditionalCards(player.getAdditionalCards() + creatureCard.getCardDraw());
+		opponentHealth += creatureCard.getOpponentHealthChange();
 
-		move += SUMMON + SPACE + to_string(cardId) + END_EXPRESSION + SPACE;
+		move = SUMMON + SPACE + to_string(cardId) + END_EXPRESSION + SPACE;
 	}
 }
 
@@ -1728,31 +1801,6 @@ void GameState::playItem(const Card& item, uint8_t target) {
 	player.setHealth(player.getHealth() + item.getMyHealthChange());
 	player.setAdditionalCards(player.getAdditionalCards() + item.getCardDraw());
 	opponentHealth += item.getOpponentHealthChange();
-}
-
-void GameState::setSimTypeBasedOnParent(StateSimulationType parentSimType) {
-	switch (parentSimType) {
-		case StateSimulationType::INVALID: {
-			simType = StateSimulationType::PLAY_CREATURES;
-			break;
-		}
-		case StateSimulationType::PLAY_CREATURES: {
-			simType = StateSimulationType::PLAY_ITEMS;
-			break;
-		}
-		case StateSimulationType::PLAY_ITEMS: {
-			simType = StateSimulationType::PERFORM_ATTACKS;
-			break;
-		}
-		case StateSimulationType::PERFORM_ATTACKS: {
-			simType = StateSimulationType::INVALID;
-			break;
-		}
-		default: {
-			simType = StateSimulationType::INVALID;
-			break;
-		}
-	}
 }
 
 void GameState::setItemTargets() {
@@ -1849,6 +1897,64 @@ bool GameState::validTarget(const Card& item, const BoardCard& boardCard) const 
 	bool changesAbilities = itemAbilities & boardCardAbilities;
 
 	return !notDemaging || changesAbilities;
+}
+
+bool GameState::handCombinationChangesBoard(const HandCombination& handCombination) const {
+	bool changesBoard = false;
+
+	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		uint8_t number = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+
+		if (number == 0) {
+			continue;
+		}
+
+		const Card& cardToPlay = ALL_CARDS_HOLDER.allGameCards[number];
+
+		switch(cardToPlay.getType()) {
+			case CardType::RED_ITEM: {
+				for (int8_t cardIdx = 0; cardIdx < board.getOpponentCardsCount(); ++cardIdx) {
+					if (validTarget(cardToPlay, board.getOpponentBoardCard(cardIdx))) {
+						changesBoard = true;
+						break;
+					}
+				}
+				break;
+			}
+			case CardType::GREEN_ITEM: {
+				for (int8_t cardIdx = 0; cardIdx < board.getPlayerCardsCount(); ++cardIdx) {
+					if (validTarget(cardToPlay, board.getPlayerBoardCard(cardIdx))) {
+						changesBoard = true;
+						break;
+					}
+				}
+				break;
+			}
+			case CardType::BLUE_ITEM: {
+				for (int8_t cardIdx = 0; cardIdx < board.getPlayerCardsCount(); ++cardIdx) {
+					if (validTarget(cardToPlay, board.getPlayerBoardCard(cardIdx))) {
+						changesBoard = true;
+						break;
+					}
+				}
+
+				if (!changesBoard) {
+					for (int8_t cardIdx = 0; cardIdx < board.getOpponentCardsCount(); ++cardIdx) {
+						if (validTarget(cardToPlay, board.getOpponentBoardCard(cardIdx))) {
+							changesBoard = true;
+							break;
+						}
+					}
+				}
+				break;
+			}
+			default: {
+				break;
+			}
+		}
+	}
+
+	return changesBoard;
 }
  
 void GameState::performAttack(
@@ -2114,10 +2220,20 @@ public:
 		this->turnState = turnState;
 	}
 
-	// Build the whole game tree nodes could be board nodes or hand nodes
 	void build();
+	void createHandCombinationsChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createSummonChargeChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createSummonCreaturesChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createPlayItemsChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createPerformAttacksChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createSummonCreaturesFromHandCombChildren(Node* parent, GameState* parentState, NodesQueue& children);
+	void createSummonCreaturesChildren(const HandCombination& handCombination, Node* parent, GameState* parentState, NodesQueue& children);
 	void createPlayedCardsChildren(NodeId parentId, NodesQueue& children);
+	void playItems();
+	void performAttacks();
+	void summonCreatures();
 	void reset();
+	void evaluateState(const GameState& state, const NodeId nodeId);
 
 	string getBestMoves() const;
 
@@ -2125,15 +2241,17 @@ private:
 	GameState turnState;
 	NodeId bestNode;
 	int bestEvaluation;
+	HandCombinations cardCombinations;
 
 	Graph gameTree;
 };
 
 GameTree::GameTree() :
 	turnState(),
-	gameTree(),
 	bestNode(INVALID_NODE_ID),
-	bestEvaluation(INT_MIN)
+	bestEvaluation(INT_MIN),
+	cardCombinations(),
+	gameTree()
 {
 
 }
@@ -2143,10 +2261,8 @@ GameTree::~GameTree() {
 }
 
 void GameTree::build() {
-	// The parent of the whole game tree
 	const NodeId rootId = gameTree.createNode(INVALID_NODE_ID, turnState);
 
-	// A queue with states
 	NodesQueue nodesQueue;
 	nodesQueue.push(rootId);
 
@@ -2158,113 +2274,340 @@ void GameTree::build() {
 	}
 }
 
+void GameTree::createHandCombinationsChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	turnState.getAllHandCombinations(cardCombinations);
+
+	bool nonChangingBoardState = false;
+
+	for (const HandCombination& handCombination : cardCombinations) {
+		if (parentState->handCombinationChangesBoard(handCombination)) {
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+
+			childState->setMove(EMPTY_STRING);
+			childState->setHandCombination(handCombination);
+			childState->decideSimulationType();
+
+			children.push(childNodeId);
+		}
+		else {
+			nonChangingBoardState = true;
+		}
+	}
+
+	if (nonChangingBoardState) {
+		NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+		GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+
+		childState->setMove(EMPTY_STRING);
+		childState->setSimType(StateSimulationType::FIRST_PERFORM_ATTACKS);
+
+		children.push(childNodeId);
+	}
+}
+
+void GameTree::createSummonChargeChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	const HandCombination& handCombination = parentState->getHandCombinaiton();
+
+	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		if (handCombination.cardPlayed(cardIdx)) {
+			continue;
+		}
+
+		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+
+		if (0 == cardNumber) {
+			continue;
+		}
+
+		const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+
+		if (CHARGE == card.getAbilities()[1]) {
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+
+			childState->playCreature(card, cardId);
+			childState->setPlayedCardInHandCombination(cardIdx);
+			childState->decideSimulationType();
+
+			children.push(childNodeId);
+		}
+	}
+}
+
+void GameTree::createSummonCreaturesChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	GameState* parentParent = gameTree.getNode(parent->getParentId())->getGameState();
+	if (StateSimulationType::FIRST_PERFORM_ATTACKS == parentParent->getSimType()) {
+		createSummonCreaturesFromHandCombChildren(parent, parentState,children);
+	}
+	else {
+		const HandCombination& handCombination = parentState->getHandCombinaiton();
+		createSummonCreaturesChildren(handCombination, parent, parentState, children);
+	}
+}
+
+void GameTree::createSummonCreaturesFromHandCombChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	HandCombinations handCombinations;
+	parentState->getAllHandCombinations(handCombinations);
+
+	for (const HandCombination& handCombination : handCombinations) {
+		createSummonCreaturesChildren(handCombination, parent, parentState, children);
+	}
+}
+
+void GameTree::createPlayItemsChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	const HandCombination& handCombination = parentState->getHandCombinaiton();
+	
+	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		if (handCombination.cardPlayed(cardIdx)) {
+			continue;
+		}
+	
+		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+	
+		if (0 == cardNumber) {
+			continue;
+		}
+
+		const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+		if (card.getType() != CardType::CREATURE) {
+			const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
+			// each target, for item, makes new state
+			for (uint8_t target : itemTargets) {
+				NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+				GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	
+				childState->playItem(card, target);
+				childState->setHandCombination(handCombination);
+				childState->setPlayedCardInHandCombination(cardIdx);
+				childState->decideSimulationType();
+				childState->setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
+	
+				evaluateState(*childState, childNodeId);
+				children.push(childNodeId);
+			}
+		}
+	}
+}
+
+void GameTree::createPerformAttacksChildren(Node* parent, GameState* parentState, NodesQueue& children) {
+	parentState->setAttackCreaturesTargets();
+	const Board& board = parentState->getBoard(); // TODO: remove copying
+
+	// for all attack creatures and all targets make states 
+	for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
+		const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
+	
+		if (playerBoardCard.hasAbility(CardMasks::CAN_ATTACK)) {
+			const AttackTargets& targets = playerBoardCard.getTargets();
+			for (int8_t targetId : targets) {
+				NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+				GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	
+				int8_t attackingPlayerHealthChange = 0;
+				int8_t defendingPlayerHealthChange = 0;
+				int8_t attCreatureId = playerBoardCard.extractId();
+				childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
+				childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
+				childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
+				childState->decideSimulationType();
+				childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId) + END_EXPRESSION);
+	
+				evaluateState(*childState, childNodeId);
+				children.push(childNodeId);
+			}
+		}
+	}
+}
+
+void GameTree::createSummonCreaturesChildren(const HandCombination& handCombination, Node* parent, GameState* parentState, NodesQueue& children) {
+	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+		if (handCombination.cardPlayed(cardIdx)) {
+			continue;
+		}
+
+		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+		uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+
+		if (0 == cardNumber) {
+			continue;
+		}
+
+		const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+
+		if (CardType::CREATURE == card.getType()) {
+			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+
+			childState->playCreature(card, cardId);
+			childState->setHandCombination(handCombination);
+			childState->setPlayedCardInHandCombination(cardIdx);
+			childState->decideSimulationType();
+
+			evaluateState(*childState, childNodeId);
+			children.push(childNodeId);
+		}
+	}
+}
+
 void GameTree::createPlayedCardsChildren(NodeId parentId, NodesQueue& children) {
 	Node* parent = gameTree.getNode(parentId);
 	GameState* parentState = parent->getGameState();
 
-	// First play all creatures
-	if (StateSimulationType::PLAY_CREATURES == parentState->getSimType()) {
-		HandCombinations cardCombinations;
-		parentState->getAllHandCombinations(cardCombinations);
-
-		for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
-			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
-
-			childState->setMove(EMPTY_STRING);
-			childState->setHandCombination(cardCombinations[combIdx]);
-			childState->playCards();
-			childState->setItemTargets();
-			childState->setSimType(StateSimulationType::PLAY_ITEMS);
-
-			children.push(childNodeId);
+	switch (parentState->getSimType()) {
+		case StateSimulationType::INVALID: {
+			createHandCombinationsChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::SUMMON_CHARGE_CREATURES: {
+			createSummonChargeChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::SUMMON_CREATURES_FOR_CHARGE: {
+			createSummonCreaturesChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::PLAY_ITEMS: {
+			createPlayItemsChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::PERFORM_ATTACKS: {
+			createPerformAttacksChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::FIRST_PERFORM_ATTACKS: {
+			createPerformAttacksChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::SUMMON_CREATURES: {
+			createSummonCreaturesChildren(parent, parentState, children);
+			break;
+		}
+		case StateSimulationType::END: {
+			break; // End of simulation reached
+		}
+		default: {
+			evaluateState(*parentState, parentId);
+			break;
 		}
 	}
-	else if (StateSimulationType::PLAY_ITEMS == parentState->getSimType()) {
-		const HandCombination& handCombination = parentState->getHandCombinaiton();
-		bool itemPlayed = false;
 
-		for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
-			if (handCombination.cardPlayed(cardIdx)) {
-				continue;
-			}
+	//if (StateSimulationType::PLAY_CREATURES == parentState->getSimType()) {
+	//	HandCombinations cardCombinations;
+	//	parentState->getAllHandCombinations(cardCombinations);
+	//
+	//	for (size_t combIdx = 0; combIdx < cardCombinations.size(); ++combIdx) {
+	//		NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+	//		GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	//
+	//		childState->setMove(EMPTY_STRING);
+	//		childState->setHandCombination(cardCombinations[combIdx]);
+	//		childState->playCards();
+	//		childState->setItemTargets();
+	//		childState->setSimType(StateSimulationType::PLAY_ITEMS);
+	//
+	//		children.push(childNodeId);
+	//	}
+	//}
+	//else if (StateSimulationType::PLAY_ITEMS == parentState->getSimType()) {
+	//	const HandCombination& handCombination = parentState->getHandCombinaiton();
+	//	bool itemPlayed = false;
+	//
+	//	for (uint8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+	//		if (handCombination.cardPlayed(cardIdx)) {
+	//			continue;
+	//		}
+	//
+	//		uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
+	//		uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+	//
+	//		if (cardNumber > 0) {
+	//			const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
+	//			if (card.getType() != CardType::CREATURE) {
+	//				const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
+	//				// each target, for item, makes new state
+	//				for (uint8_t target : itemTargets) {
+	//					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+	//					GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	//
+	//					childState->playItem(card, target);
+	//					childState->setHandCombination(handCombination);
+	//					childState->setPlayedCardInHandCombination(cardIdx);
+	//					childState->checkForItemsToPlay();
+	//					childState->setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
+	//
+	//					children.push(childNodeId);
+	//
+	//					itemPlayed = true;
+	//				}
+	//			}
+	//		}
+	//	}
+	//
+	//	if (!itemPlayed) {
+	//		// Dummy state to enforece performing attacks
+	//		NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+	//		GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	//		childState->setSimType(StateSimulationType::PERFORM_ATTACKS);
+	//		childState->setMove(EMPTY_STRING);
+	//		children.push(childNodeId);
+	//	}
+	//}
+	//else if (StateSimulationType::PERFORM_ATTACKS == parentState->getSimType()) {
+	//	// first fill all creatures targets
+	//	int8_t allTargetsCount = parentState->setAttackCreaturesTargets();
+	//
+	//	if (0 == allTargetsCount) {
+	//		// No targets to attack
+	//		parentState->setSimType(StateSimulationType::EVALUATE);
+	//
+	//		int evaluation = parentState->evaluate();
+	//		if (evaluation > bestEvaluation) {
+	//			bestEvaluation = evaluation;
+	//			bestNode = parentId;
+	//		}
+	//	}
+	//	else {
+	//		const Board& board = parentState->getBoard();
+	//
+	//		// for all attack creatures and all targets make states 
+	//		for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
+	//			const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
+	//
+	//			if (playerBoardCard.hasAbility(CardMasks::CAN_ATTACK)) {
+	//				const AttackTargets& targets = playerBoardCard.getTargets();
+	//				for (int8_t targetId : targets) {
+	//					NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
+	//					GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+	//
+	//					int8_t attackingPlayerHealthChange = 0;
+	//					int8_t defendingPlayerHealthChange = 0;
+	//					int8_t attCreatureId = playerBoardCard.extractId();
+	//					childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
+	//					childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
+	//					childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
+	//					childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId) + END_EXPRESSION);
+	//
+	//					children.push(childNodeId);
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
+}
 
-			uint8_t cardNumber = handCombination.extractProperty(cardIdx, HandCombProperty::NUMBER);
-			uint8_t cardId = handCombination.extractProperty(cardIdx, HandCombProperty::ID);
+void GameTree::playItems() {
 
-			if (cardNumber > 0) {
-				const Card& card = ALL_CARDS_HOLDER.allGameCards[cardNumber];
-				if (card.getType() != CardType::CREATURE) {
-					const vector<uint8_t>& itemTargets = handCombination.itemsTargets.at(cardId);
-					// each target, for item, makes new state
-					for (uint8_t target : itemTargets) {
-						NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-						GameState* childState = gameTree.getNode(childNodeId)->getGameState();
+}
 
-						childState->playItem(card, target);
-						childState->setHandCombination(handCombination);
-						childState->setPlayedCardInHandCombination(cardIdx);
-						childState->checkForItemsToPlay();
-						childState->setMove(USE + SPACE + to_string(cardId) + SPACE + to_string(target) + END_EXPRESSION);
+void GameTree::performAttacks() {
 
-						children.push(childNodeId);
+}
 
-						itemPlayed = true;
-					}
-				}
-			}
-		}
+void GameTree::summonCreatures() {
 
-		if (!itemPlayed) {
-			// Dummy state to enforece performing attacks
-			NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-			GameState* childState = gameTree.getNode(childNodeId)->getGameState();
-			childState->setSimType(StateSimulationType::PERFORM_ATTACKS);
-			childState->setMove(EMPTY_STRING);
-			children.push(childNodeId);
-		}
-	}
-	else if (StateSimulationType::PERFORM_ATTACKS == parentState->getSimType()) {
-		// first fill all creatures targets
-		int8_t allTargetsCount = parentState->setAttackCreaturesTargets();
-
-		if (0 == allTargetsCount) {
-			// No targets to attack
-			parentState->setSimType(StateSimulationType::EVALUATE);
-
-			int evaluation = parentState->evaluate();
-			if (evaluation > bestEvaluation) {
-				bestEvaluation = evaluation;
-				bestNode = parentId;
-			}
-		}
-		else {
-			const Board& board = parentState->getBoard();
-
-			// for all attack creatures and all targets make states 
-			for (int8_t attCreatureIdx = 0; attCreatureIdx < board.getPlayerCardsCount(); ++attCreatureIdx) {
-				const BoardCard& playerBoardCard = board.getPlayerBoardCard(attCreatureIdx);
-
-				if (playerBoardCard.hasAbility(CardMasks::CAN_ATTACK)) {
-					const AttackTargets& targets = playerBoardCard.getTargets();
-					for (int8_t targetId : targets) {
-						NodeId childNodeId = gameTree.createNode(parent->getId(), *parentState);
-						GameState* childState = gameTree.getNode(childNodeId)->getGameState();
-
-						int8_t attackingPlayerHealthChange = 0;
-						int8_t defendingPlayerHealthChange = 0;
-						int8_t attCreatureId = playerBoardCard.extractId();
-						childState->performAttack(attCreatureId, targetId, attackingPlayerHealthChange, defendingPlayerHealthChange);
-						childState->setPlayerHealth(childState->getPlayer().getHealth() + attackingPlayerHealthChange);
-						childState->setOpponentHealth(childState->getOpponentHealth() + defendingPlayerHealthChange);
-						childState->setMove(ATTACK + SPACE + to_string(attCreatureId) + SPACE + to_string(targetId) + END_EXPRESSION);
-
-						children.push(childNodeId);
-					}
-				}
-			}
-		}
-	}
 }
 
 void GameTree::reset() {
@@ -2272,6 +2615,14 @@ void GameTree::reset() {
 
 	bestNode = INVALID_NODE_ID;
 	bestEvaluation = INT_MIN;
+}
+
+void GameTree::evaluateState(const GameState& state, const NodeId nodeId) {
+	const int evaluation = state.evaluate();
+	if (evaluation > bestEvaluation) {
+		bestEvaluation = evaluation;
+		bestNode = nodeId;
+	}
 }
 
 string GameTree::getBestMoves() const {
@@ -2593,7 +2944,7 @@ void Game::createAllGameCards() {
 }
 void Game::initGameTree() {
 	GameState turnState(
-		StateSimulationType::PLAY_CREATURES,
+		StateSimulationType::INVALID,
 		opponent.getHealth(),
 		player,
 		hand,
@@ -2601,12 +2952,6 @@ void Game::initGameTree() {
 		HandCombination(),
 		EMPTY_STRING
 	);
-
-	//cerr << "HAND CARDS COUNT: " << static_cast<int>(hand.getCardsCount()) << endl;
-	//
-	//for (int8_t i = 0; i < 7; ++i) {
-	//	cerr << "CARD " << i << static_cast<int>(hand.getCard(i).extractId()) << endl;
-	//}
 
 	gameTree.setTurnState(turnState);
 	gameTree.reset();
