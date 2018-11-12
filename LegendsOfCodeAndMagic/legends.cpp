@@ -2276,13 +2276,16 @@ void GameTree::reset() {
 
 string GameTree::getBestMoves() const {
 	string bestMoves = EMPTY_STRING;
-	Node* currentNode = gameTree.getNode(bestNode);
-	NodeId parentId = currentNode->getParentId();
 
-	while (INVALID_NODE_ID != parentId) {
-		bestMoves = currentNode->getGameState()->getMove() + bestMoves;
-		currentNode = gameTree.getNode(parentId);
-		parentId = currentNode->getParentId();
+	if (INVALID_NODE_ID != bestNode) {
+		Node* currentNode = gameTree.getNode(bestNode);
+		NodeId parentId = currentNode->getParentId();
+
+		while (INVALID_NODE_ID != parentId) {
+			bestMoves = currentNode->getGameState()->getMove() + bestMoves;
+			currentNode = gameTree.getNode(parentId);
+			parentId = currentNode->getParentId();
+		}
 	}
 
 	return bestMoves;
@@ -2673,7 +2676,13 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
+//First victory
 //shufflePlayer0Seed = 7357325505330546760
 //seed = -8778666055931850800
 //draftChoicesSeed = -3000373932237871214
 //shufflePlayer1Seed = 8230258112429480157
+
+//shufflePlayer0Seed = 5403642507680023789
+//seed = -8026924741729352700
+//draftChoicesSeed = 5240035254843309687
+//shufflePlayer1Seed = -4395887682863324828
