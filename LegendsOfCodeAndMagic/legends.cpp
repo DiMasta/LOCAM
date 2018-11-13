@@ -18,6 +18,7 @@
 using namespace std;
 
 //#define OUTPUT_GAME_DATA
+#define REDIRECT_COUT_TO_FILE
 #define REDIRECT_CIN_FROM_FILE
 #define DEBUG_ONE_TURN
 #define DEBUG_BATTLE
@@ -48,6 +49,7 @@ static constexpr int8_t PLAYER_TARGET = -1;
 static constexpr float INVALID_CARD_VALUE = -1.f;
 
 static const string EMPTY_STRING = "";
+static const string TAB = "\t";
 static const string SUMMON = "SUMMON";
 static const string ATTACK = "ATTACK";
 static const string PICK = "PICK";
@@ -152,13 +154,13 @@ namespace Weights {
 };
 
 struct HandCombination {
-	long long cardsNumbers = 0;
-	long long cardsIds = 0;
+	unsigned long long cardsNumbers = 0;
+	unsigned long long cardsIds = 0;
 	uint8_t playedCards = 0;
 	map<uint8_t, vector<uint8_t>> itemsTargets;
 
 	uint8_t extractProperty(uint8_t cardIdx, HandCombProperty propertyType) const {
-		long long propertyValue = 0;
+		unsigned long long propertyValue = 0;
 
 		switch (propertyType) {
 			case HandCombProperty::NUMBER: {
@@ -186,6 +188,15 @@ struct HandCombination {
 	void markPlayedCard(uint8_t cardIdx) {
 		playedCards |= 1 << cardIdx;
 	}
+
+#ifdef DEBUG_BATTLE
+	void debug() const {
+		for (int8_t cardIdx = 0; cardIdx < MAX_CARDS_IN_HAND; ++cardIdx) {
+			cout << static_cast<int>(extractProperty(cardIdx, HandCombProperty::ID)) << TAB;
+		}
+		cout << endl << endl;
+	}
+#endif
 };
 
 typedef vector<HandCombination> HandCombinations;
@@ -796,7 +807,7 @@ void Hand::getAllCombinations(
 	int maxCombinations = static_cast<int>(pow(2, cardsCount));
 
 	// Start from ..000001 until..1111111 bit 1 represents card in set
-	for (int comb = 1; comb < maxCombinations; ++comb) {
+	for (int comb = 1; comb <= maxCombinations; ++comb) {
 		int8_t combinationCost = 0;
 		HandCombination combination;
 
@@ -2277,6 +2288,12 @@ void GameTree::build() {
 void GameTree::createHandCombinationsChildren(Node* parent, GameState* parentState, NodesQueue& children) {
 	turnState.getAllHandCombinations(cardCombinations);
 
+#ifdef DEBUG_BATTLE
+	for (const HandCombination& handCombination : cardCombinations) {
+		handCombination.debug();
+	}
+#endif
+
 	bool nonChangingBoardState = false;
 
 	for (const HandCombination& handCombination : cardCombinations) {
@@ -2770,7 +2787,7 @@ void Game::getTurnInput() {
 		}
 
 #ifdef OUTPUT_GAME_DATA
-		cerr << playerHealth << "\t" << playerMana << "\t" << playerDeck << "\t" << playerRune << "\t" << playerDraw << endl;
+		cerr << playerHealth << TAB << playerMana << TAB << playerDeck << TAB << playerRune << TAB << playerDraw << endl;
 #endif
 	}
 
@@ -2778,7 +2795,7 @@ void Game::getTurnInput() {
 	int opponentActions;
 	cin >> opponentHand >> opponentActions; cin.ignore();
 #ifdef OUTPUT_GAME_DATA
-	cerr << opponentHand << "\t" << opponentActions << endl;
+	cerr << opponentHand << TAB << opponentActions << endl;
 #endif
 	for (int i = 0; i < opponentActions; i++) {
 		string cardNumberAndAction;
@@ -2811,7 +2828,7 @@ void Game::getTurnInput() {
 		cin >> cardNumber >> instanceId >> location >> cardType >> cost >> attack >> defense >> abilities >> myHealthChange >> opponentHealthChange >> cardDraw; cin.ignore();
 
 #ifdef OUTPUT_GAME_DATA
-		cerr << cardNumber << "\t" << instanceId << "\t" << location << "\t" << cardType << "\t" << cost << "\t" << attack << "\t" << defense << "\t" << abilities << "\t" << myHealthChange << "\t" << opponentHealthChange << "\t" << cardDraw << endl;
+		cerr << cardNumber << TAB << instanceId << TAB << location << TAB << cardType << TAB << cost << TAB << attack << TAB << defense << TAB << abilities << TAB << myHealthChange << TAB << opponentHealthChange << TAB << cardDraw << endl;
 #endif
 		const Card& card = createCard(
 			cardNumber,
