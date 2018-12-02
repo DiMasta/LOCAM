@@ -899,6 +899,8 @@ private:
 	AttackTargets targets;
 };
 
+typedef vector<BoardCard> BoardCardList;
+
 BoardCard::BoardCard() :
 	card(0),
 	targets()
@@ -1108,7 +1110,7 @@ public:
 
 	void reset();
 	int8_t playerDemageToLethal(const int8_t opponentHealth) const;
-	bool playerCouldAttackDirectly() const;
+	void checkForBlockers(BoardCardList& blockers) const;
 	void executeDirectAttacks() const;
 
 private:
@@ -1478,18 +1480,16 @@ int8_t Board::playerDemageToLethal(const int8_t opponentHealth) const {
 	return opponentHealth - playerCombinedAttack;
 }
 
-bool Board::playerCouldAttackDirectly() const {
+void Board::checkForBlockers(BoardCardList& blockers) const {
 	bool canAttack = true;
 
 	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < opponentCardsCount; ++opponentCreatureIdx) {
 		const BoardCard& opponentBoardCard = opponentBoard[opponentCreatureIdx];
 
 		if (opponentBoardCard.hasAbility(CardMasks::GUARD)) {
-			canAttack = false;
+			blockers.push_back(opponentBoardCard);
 		}
 	}
-
-	return canAttack;
 }
 
 void Board::executeDirectAttacks() const {
@@ -1645,6 +1645,8 @@ public:
 	void setPlayedCardInHandCombination(uint8_t cardIdx);
 	void checkForItemsToPlay();
 	void setPlayerHealth(const int8_t health);
+	void checkForLethal();
+	void overcomeBlockers(const BoardCardList& blockers);
 
 	bool checkIfPlayerDiesNextTurn() const;
 	bool validTarget(const Card& card, const BoardCard& boardCard) const;
@@ -1923,6 +1925,39 @@ void GameState::checkForItemsToPlay() {
 
 void GameState::setPlayerHealth(const int8_t health) {
 	player.setHealth(health);
+}
+
+void GameState::checkForLethal() {
+	int8_t demageToLethal = board.playerDemageToLethal(opponentHealth);
+
+	if (demageToLethal <= 0) {
+		//check if lethal could be execute
+		BoardCardList blockers;
+		board.checkForBlockers(blockers);
+
+		if (0 == blockers.size()) {
+			board.executeDirectAttacks();
+		}
+		else {
+			//check if hand cards could destroy the blockers
+			overcomeBlockers(blockers);
+		}
+	}
+	else if (demageToLethal <= MAX_ADDED_DEMAGE) {
+		//check if cards in hand could add demage for lethal (charges or buffs or summon + charge buff)
+	}
+}
+
+void GameState::overcomeBlockers(const BoardCardList& blockers) {
+	// First choose the cards which can overcome a blocker
+	// If the Charge buff is in hand and creture with lethal may be granded charge
+	// Then Check f there is enough mana to play them
+
+	for (const BoardCard& card : blockers) {
+		// Silence
+		// Demage if no ward
+		// Monster charge 
+	}
 }
 
 bool GameState::checkIfPlayerDiesNextTurn() const {
@@ -2975,17 +3010,17 @@ void Game::makeDraftTurn() {
 }
 
 void Game::makeBattleTurn() {
-	int8_t demageToLethal = board.playerDemageToLethal(opponent.getHealth());
+	GameState turnState(
+		StateSimulationType::INVALID,
+		opponent.getHealth(),
+		player,
+		hand,
+		board,
+		HandCombination(),
+		EMPTY_STRING
+	);
 
-	if (demageToLethal <= 0) {
-		//check if lethal could be executed
-		if (board.playerCouldAttackDirectly()) {
-			board.executeDirectAttacks();
-		}
-	}
-	else if (demageToLethal <= MAX_ADDED_DEMAGE) {
-		//check if cards in hand could add demage for lethal (charges or buffs or summon + charge buff)
-	}
+	turnState.checkForLethal();
 
 	//initGameTree();
 	//gameTree.build();
