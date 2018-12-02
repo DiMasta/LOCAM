@@ -45,6 +45,7 @@ static constexpr int ABILITIES_COUNT = 6;
 static constexpr int ITEM_GIVING_CHARGE = 140;
 
 static constexpr int8_t PLAYER_TARGET = -1;
+static constexpr int8_t MAX_ADDED_DEMAGE = 20;
 
 static constexpr float INVALID_CARD_VALUE = -1.f;
 
@@ -1106,6 +1107,9 @@ public:
 	int getBoardSum(Side side, BoardSum sumType) const;
 
 	void reset();
+	int8_t playerDemageToLethal(const int8_t opponentHealth) const;
+	bool playerCouldAttackDirectly() const;
+	void executeDirectAttacks() const;
 
 private:
 	BoardCard playerBoard[MAX_BOARD_CREATURES];
@@ -1466,6 +1470,34 @@ int Board::getBoardSum(Side side, BoardSum sumType) const {
 void Board::reset() {
 	playerCardsCount = 0;
 	opponentCardsCount = 0;
+}
+
+int8_t Board::playerDemageToLethal(const int8_t opponentHealth) const {
+	int8_t playerCombinedAttack = getBoardSum(Side::PLAYER, BoardSum::ATT);
+
+	return opponentHealth - playerCombinedAttack;
+}
+
+bool Board::playerCouldAttackDirectly() const {
+	bool canAttack = true;
+
+	for (int8_t opponentCreatureIdx = 0; opponentCreatureIdx < opponentCardsCount; ++opponentCreatureIdx) {
+		const BoardCard& opponentBoardCard = opponentBoard[opponentCreatureIdx];
+
+		if (opponentBoardCard.hasAbility(CardMasks::GUARD)) {
+			canAttack = false;
+		}
+	}
+
+	return canAttack;
+}
+
+void Board::executeDirectAttacks() const {
+	for (int8_t playerCreatureIdx = 0; playerCreatureIdx < playerCardsCount; ++playerCreatureIdx) {
+		const BoardCard& playerBoardCard = playerBoard[playerCreatureIdx];
+
+		cout << playerBoardCard.extractId() << SPACE << OPPONENT_ATTCK << endl;
+	}
 }
 
 class Player {
@@ -2943,17 +2975,29 @@ void Game::makeDraftTurn() {
 }
 
 void Game::makeBattleTurn() {
-	initGameTree();
-	gameTree.build();
+	int8_t demageToLethal = board.playerDemageToLethal(opponent.getHealth());
 
-	string bestMoves = gameTree.getBestMoves();
+	if (demageToLethal <= 0) {
+		//check if lethal could be executed
+		if (board.playerCouldAttackDirectly()) {
+			board.executeDirectAttacks();
+		}
+	}
+	else if (demageToLethal <= MAX_ADDED_DEMAGE) {
+		//check if cards in hand could add demage for lethal (charges or buffs or summon + charge buff)
+	}
 
-	if (EMPTY_STRING == bestMoves) {
-		cout << PASS << endl;
-	}
-	else {
-		cout << bestMoves << endl;
-	}
+	//initGameTree();
+	//gameTree.build();
+	//
+	//string bestMoves = gameTree.getBestMoves();
+	//
+	//if (EMPTY_STRING == bestMoves) {
+	//	cout << PASS << endl;
+	//}
+	//else {
+	//	cout << bestMoves << endl;
+	//}
 }
 
 void Game::createAllGameCards() {
